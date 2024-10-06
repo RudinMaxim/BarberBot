@@ -1,0 +1,7 @@
+node:
+    mode: production
+telegram:
+    sheets:
+        file: sheets.json
+        id: teak-territory-430216-s7
+    token: 8008874726:AAGyfIFIPUDnmDDN0Cr5xjCF84Cf0NzqYLs
