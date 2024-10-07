@@ -1,18 +1,23 @@
 package common
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // Client модель клиента
 type Client struct {
-	ID           int64
-	Name         string
-	Phone        string
-	Telegram     string
-	Email        string
-	RegisteredAt time.Time
-	LastVisit    time.Time
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	UUID         uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"uuid"`
+	Name         string    `gorm:"not null" json:"name"`
+	Phone        string    `gorm:"uniqueIndex" json:"phone"`
+	Telegram     string    `json:"telegram"`
+	Email        string    `json:"email"`
+	RegisteredAt time.Time `json:"registered_at"`
+	LastVisit    time.Time `json:"last_visit"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	IsActive     bool      `gorm:"default:true" json:"is_active"`
 }
 
 // Appointment модель записи на услугу

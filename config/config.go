@@ -48,9 +48,17 @@ func Init() {
 
 func createDefaultConfig() {
 	viper.SetDefault("node.mode", os.Getenv("NODE_MODE"))
+
 	viper.SetDefault("telegram.token", os.Getenv("TELEGRAM_TOKEN"))
-	viper.SetDefault("telegram.sheets.file", os.Getenv("GOOGLE_CREDENTIALS_FILE"))
-	viper.SetDefault("telegram.sheets.id", os.Getenv("GOOGLE_SPREADSHEET_ID"))
+
+	viper.SetDefault("database.host", os.Getenv("DB_HOST"))
+	viper.SetDefault("database.port", os.Getenv("DB_PORT"))
+	viper.SetDefault("database.user", os.Getenv("DB_USER"))
+	viper.SetDefault("database.password", os.Getenv("DB_PASSWORD"))
+	viper.SetDefault("database.name", os.Getenv("DB_NAME"))
+	viper.SetDefault("database.max_idle_conns", 10)
+	viper.SetDefault("database.max_open_conns", 100)
+	viper.SetDefault("database.conn_max_lifetime", 3600)
 
 	if err := viper.SafeWriteConfig(); err != nil {
 		log.Fatalf("Error writing default config file: %v", err)

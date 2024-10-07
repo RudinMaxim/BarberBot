@@ -8,7 +8,7 @@ import (
 
 var (
 	actionLogger *log.Logger
-	apptLogger   *log.Logger
+	debugLogger  *log.Logger
 	once         sync.Once
 )
 
@@ -24,7 +24,7 @@ func init() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		apptLogger = log.New(apptFile, "APPOINTMENT: ", log.Ldate|log.Ltime|log.Lshortfile)
+		debugLogger = log.New(apptFile, "APPOINTMENT: ", log.Ldate|log.Ltime|log.Lshortfile)
 	})
 }
 
@@ -32,6 +32,6 @@ func LogAction(message string) {
 	actionLogger.Println(message)
 }
 
-func LogAppointment(message string) {
-	apptLogger.Println(message)
+func LogDebug(message string) {
+	debugLogger.Println(message)
 }
