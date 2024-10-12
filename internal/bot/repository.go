@@ -4,40 +4,42 @@ import (
 	"fmt"
 
 	"github.com/RudinMaxim/BarberBot.git/common"
-	"github.com/RudinMaxim/BarberBot.git/config"
+	"gorm.io/gorm"
 )
 
 type Repository struct {
-	clients            map[int64]common.Client
-	registrationStates map[int64]*RegistrationData
+	db *gorm.DB
 }
 
-func NewRepository() *Repository {
-	return &Repository{
-		clients:            make(map[int64]common.Client),
-		registrationStates: make(map[int64]*RegistrationData),
+func NewRepository(db *gorm.DB) *Repository {
+	return &Repository{db: db}
+}
+
+func (r *Repository) CreateClient(client *common.Client) error {
+	return r.db.Create(client).Error
+}
+
+func (r *Repository) GetClientBy(field string, value interface{}) (*common.Client, error) {
+	var client common.Client
+	err := r.db.Where(field+" = ?", value).First(&client).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get category by %w: %w", field, err)
 	}
+	return &client, nil
 }
 
-func (r *Repository) SaveClient(client common.Client) error {
-	r.clients[client.ID] = client
-	config.LogAction(fmt.Sprintf("Сохранен новый клиент: ID=%d, Имя=%s, Телефон=%s", client.ID, client.Name, client.Phone))
-	return nil
+func (r *Repository) GetClientByTelegramID(telegramID int64) (*common.Client, error) {
+	return r.GetClientBy("telegram_id", telegramID)
 }
 
-func (r *Repository) GetRegistrationState(userID int64) *RegistrationData {
-	state, exists := r.registrationStates[userID]
-	if !exists {
-		state = &RegistrationData{State: StateNone}
-		r.registrationStates[userID] = state
-	}
-	return state
+func (r *Repository) GetClientByTelegram(telegram string) (*common.Client, error) {
+	return r.GetClientBy("telegram", telegram)
 }
 
-func (r *Repository) SetRegistrationState(userID int64, state *RegistrationData) {
-	r.registrationStates[userID] = state
+func (r *Repository) GetClientByPhone(phone string) (*common.Client, error) {
+	return r.GetClientBy("phone", phone)
 }
 
-func (r *Repository) ClearRegistrationState(userID int64) {
-	delete(r.registrationStates, userID)
+func (r *Repository) GetClientByEmail(email string) (*common.Client, error) {
+	return r.GetClientBy("email", email)
 }

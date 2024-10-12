@@ -1,7 +1,13 @@
+database:
+    conn_max_lifetime: 3600
+    host: aws-0-eu-central-1.pooler.supabase.com
+    max_idle_conns: 10
+    max_open_conns: 100
+    name: postgres
+    password: JRUkRf4hYqe0uxLM
+    port: "6543"
+    user: postgres.hzqptekopyduwhazytud
 node:
-    mode: production
+    mode: development
 telegram:
-    sheets:
-        file: sheets.json
-        id: teak-territory-430216-s7
     token: 8008874726:AAGyfIFIPUDnmDDN0Cr5xjCF84Cf0NzqYLs

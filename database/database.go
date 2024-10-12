@@ -34,11 +34,11 @@ func InitDatabase() (*gorm.DB, error) {
 	log.Println("Successfully connected to database")
 
 	// if viper.GetString("node.mode") == "development" {
-	err = AutoMigrate(db)
-	if err != nil {
-		log.Printf("Failed to auto migrate: %v", err)
-		return nil, err
-	}
+	// err = AutoMigrate(db)
+	// if err != nil {
+	// 	log.Printf("Failed to auto migrate: %v", err)
+	// 	return nil, err
+	// }
 	// }
 
 	return db, nil

@@ -10,12 +10,22 @@ import (
 func NormalizePhoneNumber(phone string) string {
 	re := regexp.MustCompile("[^0-9]")
 	numbers := re.ReplaceAllString(phone, "")
+
+	if len(numbers) == 0 {
+		return ""
+	}
+
 	if len(numbers) == 11 && numbers[0] == '8' {
 		numbers = "7" + numbers[1:]
 	}
 	if len(numbers) == 10 {
 		numbers = "7" + numbers
 	}
+
+	if len(numbers) != 11 {
+		return ""
+	}
+
 	return fmt.Sprintf("+7 (%s) %s-%s-%s", numbers[1:4], numbers[4:7], numbers[7:9], numbers[9:])
 }
 

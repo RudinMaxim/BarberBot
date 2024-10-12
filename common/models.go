@@ -12,6 +12,7 @@ type Client struct {
 	Name         string    `gorm:"not null" json:"name"`
 	Phone        string    `gorm:"uniqueIndex" json:"phone"`
 	Telegram     string    `json:"telegram"`
+	TelegramID   int64     `json:"telegram_id"`
 	Email        string    `json:"email"`
 	RegisteredAt time.Time `json:"registered_at"`
 	LastVisit    time.Time `json:"last_visit"`
