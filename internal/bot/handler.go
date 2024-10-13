@@ -1,25 +1,26 @@
 package bot
 
 import (
-	"bytes"
 	"log"
-	"text/template"
 	"time"
 
 	"github.com/RudinMaxim/BarberBot.git/common"
 	"github.com/RudinMaxim/BarberBot.git/helper"
+	"github.com/RudinMaxim/BarberBot.git/internal/appointments"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type Handler struct {
-	service *Service
-	bot     *tgbotapi.BotAPI
+	service      *Service
+	bot          *tgbotapi.BotAPI
+	appointments appointments.Service
 }
 
-func NewHandler(service *Service, bot *tgbotapi.BotAPI) *Handler {
+func NewHandler(service *Service, bot *tgbotapi.BotAPI, appointments appointments.Service) *Handler {
 	return &Handler{
-		service: service,
-		bot:     bot,
+		service:      service,
+		bot:          bot,
+		appointments: appointments,
 	}
 }
 
@@ -78,43 +79,32 @@ func (h *Handler) handleCommand(update tgbotapi.Update, userID int64, chatID int
 
 func (h *Handler) handleStart(update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
-	username := update.Message.From.UserName
+	userID := update.Message.From.ID
 
-	_, err := h.service.GetClientByTelegram(username)
-	
+	client, err := h.service.GetClientByTelegramID(userID)
 	if err != nil {
+		log.Printf("Error getting client: %v", err)
+	}
+
+	if client == nil {
 		h.requestContact(chatID)
 		return
 	}
 
-	h.sendMessage(chatID, "Вы уже зарегистрированы. Добро пожаловать!")
-	h.sendWelcomeMessage(chatID, username)
-}
-
-func (h *Handler) requestContact(chatID int64) {
-	msg := tgbotapi.NewMessage(chatID, "Пожалуйста, поделитесь своим контактом для завершения регистрации.")
-	keyboard := tgbotapi.NewReplyKeyboard(
-		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButtonContact("Поделиться контактом"),
-		),
-	)
-
-	keyboard.OneTimeKeyboard = true
-	msg.ReplyMarkup = keyboard
-
-	h.bot.Send(msg)
+	h.sendMessage(chatID, helper.GetFormattedMessage("hello_user", update.Message.From.FirstName))
+	h.sendWelcomeMessage(chatID)
 }
 
 func (h *Handler) handleContact(message *tgbotapi.Message) {
 	if message.Contact == nil {
-		h.sendMessage(message.Chat.ID, "Пожалуйста, используйте кнопку 'Поделиться контактом' для регистрации.")
+		h.sendMessage(message.Chat.ID, helper.GetText("registration_start"))
 		return
 	}
 
 	username := message.From.UserName
 	phone := message.Contact.PhoneNumber
 
-	err := h.service.CreateClient(&common.Client{
+	client, err := h.service.CreateClient(&common.Client{
 		TelegramID: message.From.ID,
 		Phone:      phone,
 		Telegram:   username,
@@ -124,40 +114,18 @@ func (h *Handler) handleContact(message *tgbotapi.Message) {
 		IsActive:   true,
 	})
 
-	if err != nil {
+	if client == nil && err != nil {
 		log.Printf("Error creating new client: %v", err)
-		h.sendMessage(message.Chat.ID, "Произошла ошибка при создании вашего аккаунта. Пожалуйста, попробуйте позже.")
+		h.sendMessage(message.Chat.ID, helper.GetText("invalid_create_user"))
 		return
 	}
-	h.sendMessage(message.Chat.ID, "Спасибо за регистрацию!")
 
-	// Send welcome message
-	h.sendWelcomeMessage(message.Chat.ID, username)
+	h.sendMessage(message.Chat.ID, helper.GetFormattedMessage("registration_complete", message.From.FirstName))
+	h.sendWelcomeMessage(message.Chat.ID)
 }
-func (h *Handler) sendWelcomeMessage(chatID int64, username string) {
-	if username == "" {
-		username = "дорогой клиент"
-	}
-	welcomeTemplate := helper.GetText("welcome_message")
 
-	tmpl, err := template.New("welcome").Parse(welcomeTemplate)
-	if err != nil {
-		log.Printf("Error parsing welcome message template: %v", err)
-		h.sendMessage(chatID, "Добро пожаловать!")
-		return
-	}
-
-	var msgBuffer bytes.Buffer
-	err = tmpl.Execute(&msgBuffer, map[string]string{
-		"Username": username,
-	})
-	if err != nil {
-		log.Printf("Error executing welcome message template: %v", err)
-		h.sendMessage(chatID, "Добро пожаловать!")
-		return
-	}
-
-	h.sendMessage(chatID, msgBuffer.String())
+func (h *Handler) sendWelcomeMessage(chatID int64) {
+	h.sendMessage(chatID, helper.GetText("welcome_message"))
 }
 
 func (h *Handler) handleUnknownCommand(update tgbotapi.Update) {
@@ -206,10 +174,26 @@ func (h *Handler) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 	// TODO: Implement callback query handling if needed
 }
 
+// ==================================
+
 func (h *Handler) sendMessage(chatID int64, text string) {
 	msg := tgbotapi.NewMessage(chatID, text)
 	_, err := h.bot.Send(msg)
 	if err != nil {
 		log.Printf("Error sending message: %v", err)
 	}
+}
+
+func (h *Handler) requestContact(chatID int64) {
+	msg := tgbotapi.NewMessage(chatID, helper.GetText("registration_start"))
+	keyboard := tgbotapi.NewReplyKeyboard(
+		tgbotapi.NewKeyboardButtonRow(
+			tgbotapi.NewKeyboardButtonContact(helper.GetText("sheared_contact")),
+		),
+	)
+
+	keyboard.OneTimeKeyboard = true
+	msg.ReplyMarkup = keyboard
+
+	h.bot.Send(msg)
 }

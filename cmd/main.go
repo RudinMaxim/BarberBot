@@ -6,6 +6,7 @@ import (
 
 	"github.com/RudinMaxim/BarberBot.git/config"
 	"github.com/RudinMaxim/BarberBot.git/database"
+	"github.com/RudinMaxim/BarberBot.git/internal/appointments"
 	"github.com/RudinMaxim/BarberBot.git/internal/bot"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"gorm.io/gorm"
@@ -25,16 +26,18 @@ func main() {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 
+	repo := appointments.NewRepository(app.db)
+	appointmentsService := appointments.NewService(repo)
+
 	botRepo := bot.NewRepository(app.db)
 	botService := bot.NewClientService(botRepo)
-	botHandler := bot.NewHandler(botService, app.bot)
+	botHandler := bot.NewHandler(botService, app.bot, *appointmentsService)
 
 	config.LogAction("Bot components created")
 	config.LogAction("Bot started")
 
 	app.runBot(botHandler)
 }
-
 func (app *application) initialize() error {
 	config.LogAction("Initializing configuration...")
 	config.Init()

@@ -32,6 +32,36 @@ var migrations = []struct {
 			return db.Migrator().DropTable(&common.Client{})
 		},
 	},
+	{
+		Version: 1,
+		Name:    "create_service_table",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&common.Service{})
+		},
+		Down: func(db *gorm.DB) error {
+			return db.Migrator().DropTable(&common.Service{})
+		},
+	},
+	{
+		Version: 1,
+		Name:    "create_working_hours_table",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&common.WorkingHours{})
+		},
+		Down: func(db *gorm.DB) error {
+			return db.Migrator().DropTable(&common.WorkingHours{})
+		},
+	},
+	{
+		Version: 1,
+		Name:    "create_working_hours_table",
+		Up: func(db *gorm.DB) error {
+			return db.AutoMigrate(&common.Appointment{})
+		},
+		Down: func(db *gorm.DB) error {
+			return db.Migrator().DropTable(&common.Appointment{})
+		},
+	},
 }
 
 func AutoMigrate(db *gorm.DB) error {

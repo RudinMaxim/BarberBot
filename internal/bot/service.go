@@ -14,12 +14,18 @@ func NewClientService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) CreateClient(client *common.Client) error {
+func (s *Service) CreateClient(client *common.Client) (*common.Client, error) {
 	client.RegisteredAt = time.Now()
 	client.CreatedAt = time.Now()
 	client.UpdatedAt = time.Now()
 	client.IsActive = true
-	return s.repo.CreateClient(client)
+
+	createdClient, err := s.repo.CreateClient(client)
+	if err != nil {
+		return nil, err
+	}
+
+	return createdClient, nil
 }
 
 // давай реализуем регистрацию. при вызове старт, начинается процес регистрации, нового пользователя. запрашивается контакит. Проверяется, если такой пользователь существует, то ничего не делать так же вызывать welcome_message.
