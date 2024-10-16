@@ -37,6 +37,11 @@ func Init() {
 
 	viper.SetConfigName("texts")
 	viper.SetConfigType("yaml")
+
+	viper.AddConfigPath(".")
+	viper.AddConfigPath("./texts")
+	viper.AddConfigPath("../texts")
+
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatalf("Error reading texts file: %v", err)
 	}

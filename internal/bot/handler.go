@@ -24,6 +24,8 @@ func NewHandler(service *Service, bot *tgbotapi.BotAPI, appointments appointment
 	}
 }
 
+// ================Common==================
+
 func (h *Handler) HandleUpdate(update tgbotapi.Update) {
 	if update.Message == nil && update.CallbackQuery == nil {
 		return
@@ -77,6 +79,64 @@ func (h *Handler) handleCommand(update tgbotapi.Update, userID int64, chatID int
 	}
 }
 
+func (h *Handler) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
+	// TODO: Implement callback query handling if needed
+}
+
+func (h *Handler) sendMessage(chatID int64, text string) {
+	msg := tgbotapi.NewMessage(chatID, text)
+	_, err := h.bot.Send(msg)
+	if err != nil {
+		log.Printf("Error sending message: %v", err)
+	}
+}
+
+// ================Static==================
+
+func (h *Handler) sendWelcomeMessage(chatID int64) {
+	h.sendMessage(chatID, helper.GetText("welcome_message"))
+}
+
+func (h *Handler) handleUnknownCommand(update tgbotapi.Update) {
+	unknownCommandText := helper.GetText("unknown_command")
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, unknownCommandText)
+	h.bot.Send(msg)
+}
+
+func (h *Handler) handleHelp(update tgbotapi.Update) {
+	h.sendMessage(update.Message.Chat.ID, helper.GetText("help_message"))
+}
+
+func (h *Handler) handleContactMaster(update tgbotapi.Update) {
+	h.sendMessage(update.Message.Chat.ID, helper.GetText("contact_info"))
+}
+
+func (h *Handler) handleServices(update tgbotapi.Update) {
+	h.sendMessage(update.Message.Chat.ID, helper.GetText("services_list"))
+}
+
+func (h *Handler) handleAbout(update tgbotapi.Update) {
+	h.sendMessage(update.Message.Chat.ID, helper.GetText("about_master"))
+}
+
+func (h *Handler) handleMyAppointments(update tgbotapi.Update) {
+	// TODO: Implement appointments viewing logic
+	h.sendMessage(update.Message.Chat.ID, "Функция просмотра записей будет доступна в ближайшее время.")
+}
+
+func (h *Handler) handleCancel(update tgbotapi.Update) {
+	// TODO: Implement cancellation logic
+	h.sendMessage(update.Message.Chat.ID, "Функция отмены записи будет доступна в ближайшее время.")
+}
+
+func (h *Handler) handleReschedule(update tgbotapi.Update) {
+	// TODO: Implement rescheduling logic
+	h.sendMessage(update.Message.Chat.ID, "Функция переноса записи будет доступна в ближайшее время.")
+}
+
+// ================Dynamic==================
+
+// Start
 func (h *Handler) handleStart(update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 	userID := update.Message.From.ID
@@ -124,66 +184,6 @@ func (h *Handler) handleContact(message *tgbotapi.Message) {
 	h.sendWelcomeMessage(message.Chat.ID)
 }
 
-func (h *Handler) sendWelcomeMessage(chatID int64) {
-	h.sendMessage(chatID, helper.GetText("welcome_message"))
-}
-
-func (h *Handler) handleUnknownCommand(update tgbotapi.Update) {
-	unknownCommandText := helper.GetText("unknown_command")
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, unknownCommandText)
-	h.bot.Send(msg)
-}
-
-func (h *Handler) handleHelp(update tgbotapi.Update) {
-	h.sendMessage(update.Message.Chat.ID, helper.GetText("help_message"))
-}
-
-func (h *Handler) handleContactMaster(update tgbotapi.Update) {
-	h.sendMessage(update.Message.Chat.ID, helper.GetText("contact_info"))
-}
-
-func (h *Handler) handleServices(update tgbotapi.Update) {
-	h.sendMessage(update.Message.Chat.ID, helper.GetText("services_list"))
-}
-
-func (h *Handler) handleAbout(update tgbotapi.Update) {
-	h.sendMessage(update.Message.Chat.ID, helper.GetText("about_master"))
-}
-
-func (h *Handler) handleBook(update tgbotapi.Update) {
-	// TODO: Implement booking logic
-	h.sendMessage(update.Message.Chat.ID, "Функция бронирования будет доступна в ближайшее время.")
-}
-
-func (h *Handler) handleMyAppointments(update tgbotapi.Update) {
-	// TODO: Implement appointments viewing logic
-	h.sendMessage(update.Message.Chat.ID, "Функция просмотра записей будет доступна в ближайшее время.")
-}
-
-func (h *Handler) handleCancel(update tgbotapi.Update) {
-	// TODO: Implement cancellation logic
-	h.sendMessage(update.Message.Chat.ID, "Функция отмены записи будет доступна в ближайшее время.")
-}
-
-func (h *Handler) handleReschedule(update tgbotapi.Update) {
-	// TODO: Implement rescheduling logic
-	h.sendMessage(update.Message.Chat.ID, "Функция переноса записи будет доступна в ближайшее время.")
-}
-
-func (h *Handler) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
-	// TODO: Implement callback query handling if needed
-}
-
-// ==================================
-
-func (h *Handler) sendMessage(chatID int64, text string) {
-	msg := tgbotapi.NewMessage(chatID, text)
-	_, err := h.bot.Send(msg)
-	if err != nil {
-		log.Printf("Error sending message: %v", err)
-	}
-}
-
 func (h *Handler) requestContact(chatID int64) {
 	msg := tgbotapi.NewMessage(chatID, helper.GetText("registration_start"))
 	keyboard := tgbotapi.NewReplyKeyboard(
@@ -197,3 +197,11 @@ func (h *Handler) requestContact(chatID int64) {
 
 	h.bot.Send(msg)
 }
+
+// Book
+func (h *Handler) handleBook(update tgbotapi.Update) {
+	// TODO: Implement booking logic
+	h.sendMessage(update.Message.Chat.ID, "Функция бронирования будет доступна в ближайшее время.")
+}
+
+// ==================================
