@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  go-bot:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - TZ=UTC
+    volumes:
+      - ./.env:/app/.env
+      - ./config.yaml:/app/config.yaml
+      - ./texts.yaml:/app/texts.yaml
+    restart: unless-stopped
+

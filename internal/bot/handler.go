@@ -317,15 +317,13 @@ func (h *Handler) sendTimeSelection(chatID int64, userID int64) {
 	state := h.bookingStates[userID]
 	serviceIDs := []uuid.UUID{uuid.MustParse(state.ServiceID)}
 
-	fmt.Println(serviceIDs, state)
-
 	availableSlots, err := h.service.GetAvailableSlots(serviceIDs, state.Date)
 	if err != nil {
 		log.Printf("Error getting available time slots: %v", err)
 		h.sendMessage(chatID, "Произошла ошибка при получении доступных временных слотов.")
 	}
 
-	fmt.Println(availableSlots)
+	fmt.Print(availableSlots)
 
 	var keyboard [][]tgbotapi.InlineKeyboardButton
 	for _, slot := range availableSlots {
@@ -430,8 +428,9 @@ func (h *Handler) handleBookingConfirmation(chatID int64, userID int64) {
 	if err != nil {
 		log.Printf("Error creating appointment: %v", err)
 		h.sendMessage(chatID, "Произошла ошибка при создании записи. Пожалуйста, попробуйте еще раз.")
-		return
 	}
+
+	fmt.Println("Appointment created:", appointment)
 
 	successMessage := fmt.Sprintf(
 		"Ваша запись успешно создана!\n\n"+

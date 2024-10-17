@@ -286,5 +286,10 @@ func (s *Service) CreateAppointment(userID int64, timeStr string) (*common.Appoi
 		Status:     "scheduled",
 	}
 
+	err = s.repo.CreateAppointment(appointment)
+	if err != nil {
+		fmt.Println()
+	}
+
 	return appointment, nil
 }
