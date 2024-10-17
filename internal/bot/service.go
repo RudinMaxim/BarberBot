@@ -210,14 +210,11 @@ func (s *Service) GetAvailableSlots(serviceIDs []uuid.UUID, date time.Time) ([]t
 		return nil, fmt.Errorf("failed to get services: %w", err)
 	}
 
-	fmt.Println("services:", services)
-
 	// Вычисляем общую продолжительность всех выбранных сервисов
 	totalDuration := 0
 	for _, service := range services {
 		totalDuration += service.Duration
 	}
-
 	// Генерируем доступные слоты
 	availableSlots := []time.Time{}
 	currentTime := time.Date(date.Year(), date.Month(), date.Day(), workingHours.StartTime.Hour(), workingHours.StartTime.Minute(), 0, 0, date.Location())
@@ -239,7 +236,7 @@ func (s *Service) GetAvailableSlots(serviceIDs []uuid.UUID, date time.Time) ([]t
 			availableSlots = append(availableSlots, currentTime)
 		}
 
-		currentTime = currentTime.Add(15 * time.Minute) // Шаг в 15 минут
+		currentTime = currentTime.Add(30 * time.Minute)
 	}
 
 	return availableSlots, nil

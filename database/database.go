@@ -14,7 +14,7 @@ func getDSN() string {
 		"postgres.hzqptekopyduwhazytud",
 		"JRUkRf4hYqe0uxLM",
 		"postgres",
-		"6543",
+		"5432",
 	)
 	log.Printf("Attempting to connect to database with DSN: %s", dsn)
 	return dsn

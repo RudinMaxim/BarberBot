@@ -73,12 +73,9 @@ func (r *Repository) UpdateAppointment(appointment *common.Appointment) error {
 }
 
 func (r *Repository) GetServiceByID(serviceID uuid.UUID) (common.Service, error) {
-	for _, service := range r.services {
-		if service.UUID == serviceID {
-			return service, nil
-		}
-	}
-	return common.Service{}, fmt.Errorf("service not found")
+	var service common.Service
+	err := r.db.First(&service, serviceID).Error
+	return service, err
 }
 
 func (r *Repository) GetServiceList() ([]common.Service, error) {

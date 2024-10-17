@@ -323,8 +323,6 @@ func (h *Handler) sendTimeSelection(chatID int64, userID int64) {
 		h.sendMessage(chatID, "Произошла ошибка при получении доступных временных слотов.")
 	}
 
-	fmt.Print(availableSlots)
-
 	var keyboard [][]tgbotapi.InlineKeyboardButton
 	for _, slot := range availableSlots {
 		button := tgbotapi.NewInlineKeyboardButtonData(
@@ -349,15 +347,17 @@ func (h *Handler) sendBookingConfirmation(chatID int64, userID int64) {
 	if err != nil {
 		log.Printf("Error parsing serviceID: %v", err)
 		h.sendMessage(chatID, "Некорректный идентификатор услуги.")
-		return
 	}
+
+	fmt.Println("serviceID", serviceID)
 
 	service, err := h.service.GetServiceByID(serviceID)
 	if err != nil {
 		log.Printf("Error getting service: %v", err)
 		h.sendMessage(chatID, "Произошла ошибка при получении информации об услуге.")
-		return
 	}
+
+	fmt.Println("service", service)
 
 	confirmationText := fmt.Sprintf(
 		"Пожалуйста, подтвердите ваше бронирование:\n\n"+
@@ -429,8 +429,6 @@ func (h *Handler) handleBookingConfirmation(chatID int64, userID int64) {
 		log.Printf("Error creating appointment: %v", err)
 		h.sendMessage(chatID, "Произошла ошибка при создании записи. Пожалуйста, попробуйте еще раз.")
 	}
-
-	fmt.Println("Appointment created:", appointment)
 
 	successMessage := fmt.Sprintf(
 		"Ваша запись успешно создана!\n\n"+
