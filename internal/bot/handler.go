@@ -1,26 +1,44 @@
 package bot
 
 import (
+	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/RudinMaxim/BarberBot.git/common"
 	"github.com/RudinMaxim/BarberBot.git/helper"
-	"github.com/RudinMaxim/BarberBot.git/internal/appointments"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/google/uuid"
 )
 
-type Handler struct {
-	service      *Service
-	bot          *tgbotapi.BotAPI
-	appointments appointments.Service
+const (
+	stepSelectService = iota
+	stepSelectDate
+	stepSelectTime
+	stepConfirmBooking
+	BUFFER_MINUTES   = 5
+	POSSIBLE_RECORDS = 30
+)
+
+type BookingState struct {
+	Step      int
+	ServiceID string
+	Date      time.Time
+	Time      string
 }
 
-func NewHandler(service *Service, bot *tgbotapi.BotAPI, appointments appointments.Service) *Handler {
+type Handler struct {
+	service       *Service
+	bot           *tgbotapi.BotAPI
+	bookingStates map[int64]*BookingState
+}
+
+func NewHandler(service *Service, bot *tgbotapi.BotAPI) *Handler {
 	return &Handler{
-		service:      service,
-		bot:          bot,
-		appointments: appointments,
+		service:       service,
+		bot:           bot,
+		bookingStates: make(map[int64]*BookingState),
 	}
 }
 
@@ -42,15 +60,14 @@ func (h *Handler) HandleUpdate(update tgbotapi.Update) {
 			h.handleContact(update.Message)
 			return
 		}
-	} else if update.CallbackQuery != nil {
+	} else if update.CallbackQuery != nil { // Обработка CallbackQuery
 		userID = update.CallbackQuery.From.ID
 		chatID = update.CallbackQuery.Message.Chat.ID
+		h.handleCallbackQuery(update.CallbackQuery) // Вызов обработчика CallbackQuery
 	}
 
 	if update.Message != nil && update.Message.IsCommand() {
 		h.handleCommand(update, userID, chatID)
-	} else if update.CallbackQuery != nil {
-		h.handleCallbackQuery(update.CallbackQuery)
 	}
 }
 
@@ -80,7 +97,33 @@ func (h *Handler) handleCommand(update tgbotapi.Update, userID int64, chatID int
 }
 
 func (h *Handler) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
-	// TODO: Implement callback query handling if needed
+	data := callbackQuery.Data
+	chatID := callbackQuery.Message.Chat.ID
+	userID := callbackQuery.From.ID
+
+	parts := strings.SplitN(data, ":", 2)
+	action := parts[0]
+
+	switch action {
+	case "service":
+		h.handleServiceSelection(chatID, userID, parts[1])
+	case "date":
+		h.handleDateSelection(chatID, userID, parts[1])
+	case "time":
+		h.handleTimeSelection(chatID, userID, parts[1])
+	case "confirm_booking":
+		h.handleBookingConfirmation(chatID, userID)
+	case "cancel_booking":
+		h.handleBookingCancellation(chatID, userID)
+	case "back_to_services":
+		h.bookingStates[userID].Step = stepSelectService
+		h.sendServiceSelection(chatID)
+	case "back_to_dates":
+		h.bookingStates[userID].Step = stepSelectDate
+		h.sendDateSelection(chatID)
+	default:
+		log.Printf("Unknown callback action: %s", action)
+	}
 }
 
 func (h *Handler) sendMessage(chatID int64, text string) {
@@ -200,8 +243,216 @@ func (h *Handler) requestContact(chatID int64) {
 
 // Book
 func (h *Handler) handleBook(update tgbotapi.Update) {
-	// TODO: Implement booking logic
-	h.sendMessage(update.Message.Chat.ID, "Функция бронирования будет доступна в ближайшее время.")
+	chatID := update.Message.Chat.ID
+	userID := update.Message.From.ID
+
+	client, err := h.service.GetClientByTelegramID(userID)
+	if err != nil {
+		log.Printf("Error getting client: %v", err)
+		h.sendMessage(chatID, "Произошла ошибка при получении информации о клиенте.")
+		return
+	}
+
+	if client == nil {
+		h.sendMessage(chatID, "Пожалуйста, сначала зарегистрируйтесь, отправив свой контакт.")
+		return
+	}
+
+	// Начинаем процесс бронирования
+	h.bookingStates[userID] = &BookingState{Step: stepSelectService}
+	h.sendServiceSelection(chatID)
+}
+
+func (h *Handler) sendServiceSelection(chatID int64) {
+	services, err := h.service.GetActiveServices()
+	if err != nil {
+		log.Printf("Error getting services: %v", err)
+
+		h.sendMessage(chatID, "Произошла ошибка при получении списка услуг.")
+	}
+
+	var keyboard [][]tgbotapi.InlineKeyboardButton
+	for _, service := range services {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			fmt.Sprintf("%s (%d мин, %.2f руб)", service.Name, service.Duration, service.Price),
+			fmt.Sprintf("service:%s", service.UUID),
+		)
+		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{button})
+	}
+	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("Отмена", "cancel_booking"),
+	})
+
+	msg := tgbotapi.NewMessage(chatID, "Выберите услугу:")
+	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
+	h.bot.Send(msg)
+}
+
+func (h *Handler) sendDateSelection(chatID int64) {
+	availableDates, err := h.service.GetAvailableDates()
+	if err != nil {
+		log.Printf("Error getting available dates: %v", err)
+		h.sendMessage(chatID, "Произошла ошибка при получении доступных дат.")
+	}
+
+	var keyboard [][]tgbotapi.InlineKeyboardButton
+	for _, date := range availableDates {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			date.Format("02.01.2006"),
+			fmt.Sprintf("date:%s", date.Format("2006-01-02")),
+		)
+		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{button})
+	}
+	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("Назад", "back_to_services"),
+		tgbotapi.NewInlineKeyboardButtonData("Отмена", "cancel_booking"),
+	})
+
+	msg := tgbotapi.NewMessage(chatID, "Выберите дату:")
+	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
+	h.bot.Send(msg)
+}
+
+func (h *Handler) sendTimeSelection(chatID int64, userID int64) {
+	state := h.bookingStates[userID]
+	serviceIDs := []uuid.UUID{uuid.MustParse(state.ServiceID)}
+
+	fmt.Println(serviceIDs, state)
+
+	availableSlots, err := h.service.GetAvailableSlots(serviceIDs, state.Date)
+	if err != nil {
+		log.Printf("Error getting available time slots: %v", err)
+		h.sendMessage(chatID, "Произошла ошибка при получении доступных временных слотов.")
+	}
+
+	fmt.Println(availableSlots)
+
+	var keyboard [][]tgbotapi.InlineKeyboardButton
+	for _, slot := range availableSlots {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			slot.Format("15:04"),
+			fmt.Sprintf("time:%s", slot.Format("15:04")),
+		)
+		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{button})
+	}
+	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("Назад", "back_to_dates"),
+		tgbotapi.NewInlineKeyboardButtonData("Отмена", "cancel_booking"),
+	})
+
+	msg := tgbotapi.NewMessage(chatID, "Выберите время:")
+	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
+	h.bot.Send(msg)
+}
+
+func (h *Handler) sendBookingConfirmation(chatID int64, userID int64) {
+	state := h.bookingStates[userID]
+	serviceID, err := uuid.Parse(state.ServiceID)
+	if err != nil {
+		log.Printf("Error parsing serviceID: %v", err)
+		h.sendMessage(chatID, "Некорректный идентификатор услуги.")
+		return
+	}
+
+	service, err := h.service.GetServiceByID(serviceID)
+	if err != nil {
+		log.Printf("Error getting service: %v", err)
+		h.sendMessage(chatID, "Произошла ошибка при получении информации об услуге.")
+		return
+	}
+
+	confirmationText := fmt.Sprintf(
+		"Пожалуйста, подтвердите ваше бронирование:\n\n"+
+			"Услуга: %s\n"+
+			"Дата: %s\n"+
+			"Время: %s\n"+
+			"Стоимость: %.2f руб.",
+		service.Name,
+		state.Date.Format("02.01.2006"),
+		state.Time,
+		service.Price,
+	)
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Подтвердить", "confirm_booking"),
+			tgbotapi.NewInlineKeyboardButtonData("Отмена", "cancel_booking"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(chatID, confirmationText)
+	msg.ReplyMarkup = keyboard
+	h.bot.Send(msg)
+}
+
+func (h *Handler) handleServiceSelection(chatID int64, userID int64, serviceID string) {
+	err := h.service.SaveSelectedService(userID, serviceID)
+	if err != nil {
+		log.Printf("Error saving selected service: %v", err)
+		h.sendMessage(chatID, "Произошла ошибка при выборе услуги.")
+		return
+	}
+
+	h.bookingStates[userID].ServiceID = serviceID
+	h.bookingStates[userID].Step = stepSelectDate
+	h.sendDateSelection(chatID)
+}
+
+func (h *Handler) handleDateSelection(chatID int64, userID int64, dateStr string) {
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		log.Printf("Error parsing date: %v", err)
+		h.sendMessage(chatID, "Произошла ошибка при обработке выбранной даты.")
+		return
+	}
+
+	err = h.service.SaveSelectedDate(userID, date)
+	if err != nil {
+		log.Printf("Error saving selected date: %v", err)
+		h.sendMessage(chatID, "Произошла ошибка при выборе даты.")
+		return
+	}
+
+	h.bookingStates[userID].Date = date
+	h.bookingStates[userID].Step = stepSelectTime
+	h.sendTimeSelection(chatID, userID)
+}
+
+func (h *Handler) handleTimeSelection(chatID int64, userID int64, timeStr string) {
+	h.bookingStates[userID].Time = timeStr
+	h.bookingStates[userID].Step = stepConfirmBooking
+	h.sendBookingConfirmation(chatID, userID)
+}
+
+func (h *Handler) handleBookingConfirmation(chatID int64, userID int64) {
+	state := h.bookingStates[userID]
+	appointment, err := h.service.CreateAppointment(userID, state.Time)
+	if err != nil {
+		log.Printf("Error creating appointment: %v", err)
+		h.sendMessage(chatID, "Произошла ошибка при создании записи. Пожалуйста, попробуйте еще раз.")
+		return
+	}
+
+	successMessage := fmt.Sprintf(
+		"Ваша запись успешно создана!\n\n"+
+			"Услуга: %s\n"+
+			"Дата: %s\n"+
+			"Время: %s\n"+
+			"Стоимость: %.2f руб.",
+		appointment.Name,
+		appointment.StartTime.Format("02.01.2006"),
+		appointment.StartTime.Format("15:04"),
+		appointment.TotalPrice,
+	)
+	h.sendMessage(chatID, successMessage)
+
+	// Очистка состояния бронирования
+	delete(h.bookingStates, userID)
+}
+
+func (h *Handler) handleBookingCancellation(chatID int64, userID int64) {
+	delete(h.bookingStates, userID)
+	h.sendMessage(chatID, "Бронирование отменено. Если хотите начать заново, используйте команду /book.")
 }
 
 // ==================================

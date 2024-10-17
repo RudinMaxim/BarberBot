@@ -54,7 +54,7 @@ var migrations = []struct {
 	},
 	{
 		Version: 1,
-		Name:    "create_working_hours_table",
+		Name:    "create_appointment_table",
 		Up: func(db *gorm.DB) error {
 			return db.AutoMigrate(&common.Appointment{})
 		},
