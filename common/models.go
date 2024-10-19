@@ -44,15 +44,20 @@ type WorkingHours struct {
 }
 
 type Appointment struct {
-	UUID        uuid.UUID   `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"uuid"`
-	ClientID    uuid.UUID   `gorm:"type:uuid;not null" json:"client_id"`
-	ServiceIDs  []uuid.UUID `gorm:"type:uuid[]" json:"service_ids"`
-	StartTime   time.Time   `gorm:"type:timestamp" json:"start_time"`
-	EndTime     time.Time   `gorm:"type:timestamp" json:"end_time"`
-	Name        string      `gorm:"not null" json:"name"`
-	TotalPrice  float64     `gorm:"type:decimal(10,2);not null" json:"total_price"`
-	Status      string      `gorm:"type:varchar(20);not null" json:"status"` // "scheduled", "completed", "cancelled"
-	CreatedAt   time.Time   `json:"created_at"`
-	UpdatedAt   time.Time   `json:"updated_at"`
-	CancelledAt time.Time   `json:"cancelled_at,omitempty"`
+	UUID        uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"uuid"`
+	ClientID    uuid.UUID `gorm:"type:uuid;not null" json:"client_id"`
+	StartTime   time.Time `gorm:"type:timestamp" json:"start_time"`
+	EndTime     time.Time `gorm:"type:timestamp" json:"end_time"`
+	Name        string    `gorm:"not null" json:"name"`
+	TotalPrice  float64   `gorm:"type:decimal(10,2);not null" json:"total_price"`
+	Status      string    `gorm:"type:varchar(20);not null" json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	CancelledAt time.Time `json:"cancelled_at,omitempty"`
+	Services    []Service `gorm:"many2many:appointment_services;" json:"services"`
+}
+
+type AppointmentService struct {
+	AppointmentID uuid.UUID `gorm:"type:uuid;primary_key" json:"appointment_id"`
+	ServiceID     uuid.UUID `gorm:"type:uuid;primary_key" json:"service_id"`
 }

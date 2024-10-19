@@ -28,6 +28,8 @@ func NewService(repo *Repository) *Service {
 	}
 }
 
+// ================Client==================
+
 func (s *Service) CreateClient(client *common.Client) (*common.Client, error) {
 	client.RegisteredAt = time.Now()
 	client.CreatedAt = time.Now()
@@ -46,10 +48,6 @@ func (s *Service) GetClientByTelegramID(telegramID int64) (*common.Client, error
 	return s.repo.GetClientByTelegramID(telegramID)
 }
 
-func (s *Service) GetClientByTelegram(telegram string) (*common.Client, error) {
-	return s.repo.GetClientByTelegram(telegram)
-}
-
 func (s *Service) GetClientByPhone(phone string) (*common.Client, error) {
 	return s.repo.GetClientByPhone(phone)
 }
@@ -58,28 +56,134 @@ func (s *Service) GetClientByEmail(email string) (*common.Client, error) {
 	return s.repo.GetClientByEmail(email)
 }
 
-func (s *Service) GetServiceList() ([]common.Service, error) {
-	return s.repo.GetServiceList()
+func (s *Service) GetClientAppointments(telegramID int64) ([]common.Appointment, error) {
+	client, err := s.GetClientByTelegramID(telegramID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	appointments, err := s.repo.GetAppointmentsByClientID(client.UUID)
+	if err != nil {
+		fmt.Errorf("failed to get appointments: %w", err)
+	}
+
+	return appointments, nil
 }
+
+func (s *Service) GetClientScheduledAppointmentsByID(telegramID int64) ([]common.Appointment, error) {
+	client, err := s.GetClientByTelegramID(telegramID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	appointments, err := s.repo.GetScheduledAppointmentsByClientID(client.UUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get appointments: %w", err)
+	}
+	return appointments, nil
+}
+
+// ===============Service==================
 
 func (s *Service) GetServiceByID(serviceID uuid.UUID) (common.Service, error) {
 	return s.repo.GetServiceByID(serviceID)
-}
-
-func (s *Service) GetClientAppointments(clientID uuid.UUID) ([]common.Appointment, error) {
-	return s.repo.GetClientAppointments(clientID)
-}
-
-func (s *Service) GetAppointmentByID(appointmentID uuid.UUID) (*common.Appointment, error) {
-	return s.repo.GetAppointmentByID(appointmentID)
 }
 
 func (s *Service) GetActiveServices() ([]common.Service, error) {
 	return s.repo.GetActiveServices()
 }
 
-func (s *Service) GetAvailableDates() ([]time.Time, error) {
-	workingHours, err := s.repo.GetAvailableDates()
+// ===============Appointment==================
+
+func (s *Service) GetAppointmentByID(appointmentID uuid.UUID) (*common.Appointment, error) {
+	return s.repo.GetAppointmentByID(appointmentID)
+}
+
+func (s *Service) CancelAppointment(telegramID int64, appointmentID uuid.UUID) error {
+	client, err := s.GetClientByTelegramID(telegramID)
+	if err != nil {
+		return fmt.Errorf("failed to get client: %w", err)
+	}
+
+	appointment, err := s.repo.GetAppointmentByID(appointmentID)
+	if err != nil {
+		return fmt.Errorf("failed to get appointment: %w", err)
+	}
+
+	if appointment.ClientID != client.UUID {
+		return errors.New("appointment does not belong to this client")
+	}
+
+	now := time.Now()
+	if appointment.StartTime.Before(now) {
+		return errors.New("cannot cancel past appointments")
+	}
+	if appointment.Status == "cancelled" {
+		return errors.New("appointment is already cancelled")
+	}
+
+	appointment.Status = "cancelled"
+	appointment.CancelledAt = time.Now()
+	appointment.UpdatedAt = time.Now()
+
+	err = s.repo.UpdateAppointment(appointment)
+	if err != nil {
+		return fmt.Errorf("failed to update appointment: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) CreateAppointment(userID int64, timeStr string) (*common.Appointment, error) {
+	serviceID, err := s.getSelectedServiceForUser(userID)
+	if err != nil {
+		return nil, err
+	}
+	date, err := s.getSelectedDateForUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	layout := "2006-01-02 15:04"
+	startTime, err := time.Parse(layout, fmt.Sprintf("%s %s", date.Format("2006-01-02"), timeStr))
+	if err != nil {
+		return nil, err
+	}
+
+	service, err := s.GetServiceByID(serviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	endTime := startTime.Add(time.Duration(service.Duration) * time.Minute)
+
+	client, err := s.GetClientByTelegramID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	appointment := &common.Appointment{
+		ClientID:   client.UUID,
+		StartTime:  startTime,
+		EndTime:    endTime,
+		Name:       service.Name,
+		TotalPrice: service.Price,
+		Status:     "scheduled",
+		Services:   []common.Service{service},
+	}
+
+	err = s.repo.CreateAppointment(appointment)
+	if err != nil {
+		return nil, err
+	}
+
+	return appointment, nil
+}
+
+// ===============WorkingHours==================
+
+func (s *Service) GetWorkingHoursAvailableDates() ([]time.Time, error) {
+	workingHours, err := s.repo.GetWorkingHoursAvailableDates()
 
 	if err != nil {
 		fmt.Println("error:", err)
@@ -102,6 +206,55 @@ func (s *Service) GetAvailableDates() ([]time.Time, error) {
 
 	return availableDates, nil
 }
+
+func (s *Service) GetWorkingHoursAvailableSlots(serviceIDs []uuid.UUID, date time.Time) ([]time.Time, error) {
+	workingHours, err := s.repo.GetWorkingHours(int(date.Weekday()))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get working hours: %w", err)
+	}
+
+	appointments, err := s.repo.GetAppointmentsForDate(date)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get appointments: %w", err)
+	}
+
+	services, err := s.repo.GetServicesByIDs(serviceIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get services: %w", err)
+	}
+
+	totalDuration := 0
+	for _, service := range services {
+		totalDuration += service.Duration
+	}
+
+	availableSlots := []time.Time{}
+	currentTime := time.Date(date.Year(), date.Month(), date.Day(), workingHours.StartTime.Hour(), workingHours.StartTime.Minute(), 0, 0, date.Location())
+	endTime := time.Date(date.Year(), date.Month(), date.Day(), workingHours.EndTime.Hour(), workingHours.EndTime.Minute(), 0, 0, date.Location())
+
+	for currentTime.Add(time.Duration(totalDuration)*time.Minute).Before(endTime) || currentTime.Add(time.Duration(totalDuration)*time.Minute).Equal(endTime) {
+		isAvailable := true
+		potentialEndTime := currentTime.Add(time.Duration(totalDuration) * time.Minute)
+
+		for _, appointment := range appointments {
+			if (currentTime.Before(appointment.EndTime) && potentialEndTime.After(appointment.StartTime)) ||
+				(currentTime.Equal(appointment.StartTime) || potentialEndTime.Equal(appointment.EndTime)) {
+				isAvailable = false
+				break
+			}
+		}
+
+		if isAvailable {
+			availableSlots = append(availableSlots, currentTime)
+		}
+
+		currentTime = currentTime.Add(30 * time.Minute)
+	}
+
+	return availableSlots, nil
+}
+
+// =================================
 
 func (s *Service) SaveSelectedService(userID int64, serviceID string) error {
 	s.mutex.Lock()
@@ -155,142 +308,4 @@ func (s *Service) ClearBookingData(userID int64) {
 	defer s.mutex.Unlock()
 
 	delete(s.bookingData, userID)
-}
-
-func (s *Service) CancelAppointment(appointmentID uuid.UUID) error {
-	appointment, err := s.repo.GetAppointmentByID(appointmentID)
-	if err != nil {
-		return err
-	}
-
-	if appointment.Status != "scheduled" {
-		return errors.New("appointment cannot be cancelled")
-	}
-
-	appointment.Status = "cancelled"
-	appointment.CancelledAt = time.Now()
-	appointment.UpdatedAt = time.Now()
-
-	return s.repo.UpdateAppointment(appointment)
-}
-
-func (s *Service) RescheduleAppointment(appointmentID uuid.UUID, newStartTime time.Time) error {
-	appointment, err := s.repo.GetAppointmentByID(appointmentID)
-	if err != nil {
-		return err
-	}
-
-	if appointment.Status != "scheduled" {
-		return errors.New("appointment cannot be rescheduled")
-	}
-
-	// Recalculate end time
-	duration := appointment.EndTime.Sub(appointment.StartTime)
-	newEndTime := newStartTime.Add(duration)
-
-	appointment.StartTime = newStartTime
-	appointment.EndTime = newEndTime
-	appointment.UpdatedAt = time.Now()
-
-	return s.repo.UpdateAppointment(appointment)
-}
-
-func (s *Service) GetAvailableSlots(serviceIDs []uuid.UUID, date time.Time) ([]time.Time, error) {
-	// Получаем рабочие часы для данного дня недели
-	workingHours, err := s.repo.GetWorkingHours(int(date.Weekday()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get working hours: %w", err)
-	}
-
-	// Получаем все записи на выбранную дату
-	appointments, err := s.repo.GetAppointmentsForDate(date)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get appointments: %w", err)
-	}
-
-	// Получаем информацию о выбранных сервисах
-	services, err := s.repo.GetServicesByIDs(serviceIDs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get services: %w", err)
-	}
-
-	// Вычисляем общую продолжительность всех выбранных сервисов
-	totalDuration := 0
-	for _, service := range services {
-		totalDuration += service.Duration
-	}
-	// Генерируем доступные слоты
-	availableSlots := []time.Time{}
-	currentTime := time.Date(date.Year(), date.Month(), date.Day(), workingHours.StartTime.Hour(), workingHours.StartTime.Minute(), 0, 0, date.Location())
-	endTime := time.Date(date.Year(), date.Month(), date.Day(), workingHours.EndTime.Hour(), workingHours.EndTime.Minute(), 0, 0, date.Location())
-
-	for currentTime.Add(time.Duration(totalDuration)*time.Minute).Before(endTime) || currentTime.Add(time.Duration(totalDuration)*time.Minute).Equal(endTime) {
-		isAvailable := true
-		potentialEndTime := currentTime.Add(time.Duration(totalDuration) * time.Minute)
-
-		for _, appointment := range appointments {
-			if (currentTime.Before(appointment.EndTime) && potentialEndTime.After(appointment.StartTime)) ||
-				(currentTime.Equal(appointment.StartTime) || potentialEndTime.Equal(appointment.EndTime)) {
-				isAvailable = false
-				break
-			}
-		}
-
-		if isAvailable {
-			availableSlots = append(availableSlots, currentTime)
-		}
-
-		currentTime = currentTime.Add(30 * time.Minute)
-	}
-
-	return availableSlots, nil
-}
-
-func (s *Service) CreateAppointment(userID int64, timeStr string) (*common.Appointment, error) {
-	serviceID, err := s.getSelectedServiceForUser(userID)
-	if err != nil {
-		return nil, err
-	}
-	date, err := s.getSelectedDateForUser(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Парсинг времени
-	layout := "2006-01-02 15:04"
-	startTime, err := time.Parse(layout, fmt.Sprintf("%s %s", date.Format("2006-01-02"), timeStr))
-	if err != nil {
-		return nil, err
-	}
-
-	service, err := s.GetServiceByID(serviceID)
-	if err != nil {
-		return nil, err
-	}
-
-	endTime := startTime.Add(time.Duration(service.Duration) * time.Minute)
-
-	// Получение клиента
-	client, err := s.GetClientByTelegramID(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Создание записи
-	appointment := &common.Appointment{
-		ClientID:   client.UUID,
-		ServiceIDs: []uuid.UUID{serviceID},
-		StartTime:  startTime,
-		EndTime:    endTime,
-		Name:       service.Name,
-		TotalPrice: service.Price,
-		Status:     "scheduled",
-	}
-
-	err = s.repo.CreateAppointment(appointment)
-	if err != nil {
-		fmt.Println()
-	}
-
-	return appointment, nil
 }

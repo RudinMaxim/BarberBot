@@ -49,32 +49,28 @@ func (h *Handler) HandleUpdate(update tgbotapi.Update) {
 		return
 	}
 
-	var userID int64
-	var chatID int64
+	h.setupMenu()
 
 	if update.Message != nil {
-		userID = update.Message.From.ID
-		chatID = update.Message.Chat.ID
-
 		if update.Message.Contact != nil {
-			h.handleContact(update.Message)
+			h.handleContact(update)
 			return
 		}
-	} else if update.CallbackQuery != nil { // Обработка CallbackQuery
-		userID = update.CallbackQuery.From.ID
-		chatID = update.CallbackQuery.Message.Chat.ID
-		h.handleCallbackQuery(update.CallbackQuery) // Вызов обработчика CallbackQuery
+	} else if update.CallbackQuery != nil {
+		h.handleCallbackQuery(update.CallbackQuery)
 	}
 
 	if update.Message != nil && update.Message.IsCommand() {
-		h.handleCommand(update, userID, chatID)
+		h.handleCommand(update)
 	}
 }
 
-func (h *Handler) handleCommand(update tgbotapi.Update, userID int64, chatID int64) {
+func (h *Handler) handleCommand(update tgbotapi.Update) {
 	switch update.Message.Command() {
 	case "start":
 		h.handleStart(update)
+	case "Home":
+		h.handleHome(update)
 	case "help":
 		h.handleHelp(update)
 	case "contact":
@@ -124,12 +120,33 @@ func (h *Handler) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 	case "appointment":
 		h.handleAppointmentSelection(chatID, parts[1])
 	case "cancel":
-		h.handleAppointmentCancellation(chatID, parts[1])
+		h.handleAppointmentCancellation(chatID, userID, parts[1])
 	case "back_to_appointments":
 		h.handleMyAppointments(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
+
 	default:
-		log.Printf("Unknown callback action: %s", action)
+		h.handleUnknownCommand(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
 	}
+}
+
+func (h *Handler) setupMenu() {
+	commands := []tgbotapi.BotCommand{
+		{Command: "start", Description: "Начать работу с ботом"},
+		{Command: "help", Description: "Помощь"},
+		{Command: "services", Description: "Услуги"},
+		{Command: "book", Description: "Записаться"},
+		{Command: "my_appointments", Description: "Мои записи"},
+		{Command: "cancel", Description: "Отменить запись"},
+		{Command: "reschedule", Description: "Перенести запись"},
+		{Command: "about", Description: "О мне"},
+		{Command: "contact_master", Description: "Контакты мастера"},
+	}
+
+	cmdCfg := tgbotapi.NewSetMyCommands(
+		commands...,
+	)
+
+	h.bot.Send(cmdCfg)
 }
 
 func (h *Handler) sendMessage(chatID int64, text string) {
@@ -142,14 +159,12 @@ func (h *Handler) sendMessage(chatID int64, text string) {
 
 // ================Static==================
 
-func (h *Handler) sendWelcomeMessage(chatID int64) {
-	h.sendMessage(chatID, helper.GetText("welcome_message"))
+func (h *Handler) sendWelcomeMessage(update tgbotapi.Update) {
+	h.sendMessage(update.Message.Chat.ID, helper.GetText("welcome_message"))
 }
 
 func (h *Handler) handleUnknownCommand(update tgbotapi.Update) {
-	unknownCommandText := helper.GetText("unknown_command")
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, unknownCommandText)
-	h.bot.Send(msg)
+	h.sendMessage(update.Message.Chat.ID, helper.GetText("unknown_command"))
 }
 
 func (h *Handler) handleHelp(update tgbotapi.Update) {
@@ -168,19 +183,12 @@ func (h *Handler) handleAbout(update tgbotapi.Update) {
 	h.sendMessage(update.Message.Chat.ID, helper.GetText("about_master"))
 }
 
-func (h *Handler) handleCancel(update tgbotapi.Update) {
-	// TODO: Implement cancellation logic
-	h.sendMessage(update.Message.Chat.ID, "Функция отмены записи будет доступна в ближайшее время.")
-}
-
-func (h *Handler) handleReschedule(update tgbotapi.Update) {
-	// TODO: Implement rescheduling logic
-	h.sendMessage(update.Message.Chat.ID, "Функция переноса записи будет доступна в ближайшее время.")
+func (h *Handler) handleHome(update tgbotapi.Update) {
+	h.sendMessage(update.Message.Chat.ID, helper.GetText("home_message"))
 }
 
 // ================Dynamic==================
 
-// Start
 func (h *Handler) handleStart(update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 	userID := update.Message.From.ID
@@ -196,10 +204,12 @@ func (h *Handler) handleStart(update tgbotapi.Update) {
 	}
 
 	h.sendMessage(chatID, helper.GetFormattedMessage("hello_user", update.Message.From.FirstName))
-	h.sendWelcomeMessage(chatID)
+	h.sendWelcomeMessage(update)
 }
 
-func (h *Handler) handleContact(message *tgbotapi.Message) {
+func (h *Handler) handleContact(update tgbotapi.Update) {
+	message := update.Message
+
 	if message.Contact == nil {
 		h.sendMessage(message.Chat.ID, helper.GetText("registration_start"))
 		return
@@ -225,7 +235,7 @@ func (h *Handler) handleContact(message *tgbotapi.Message) {
 	}
 
 	h.sendMessage(message.Chat.ID, helper.GetFormattedMessage("registration_complete", message.From.FirstName))
-	h.sendWelcomeMessage(message.Chat.ID)
+	h.sendWelcomeMessage(update)
 }
 
 func (h *Handler) requestContact(chatID int64) {
@@ -242,7 +252,8 @@ func (h *Handler) requestContact(chatID int64) {
 	h.bot.Send(msg)
 }
 
-// Book
+// ==================================
+
 func (h *Handler) handleBook(update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 	userID := update.Message.From.ID
@@ -259,7 +270,6 @@ func (h *Handler) handleBook(update tgbotapi.Update) {
 		return
 	}
 
-	// Начинаем процесс бронирования
 	h.bookingStates[userID] = &BookingState{Step: stepSelectService}
 	h.sendServiceSelection(chatID)
 }
@@ -268,7 +278,6 @@ func (h *Handler) sendServiceSelection(chatID int64) {
 	services, err := h.service.GetActiveServices()
 	if err != nil {
 		log.Printf("Error getting services: %v", err)
-
 		h.sendMessage(chatID, "Произошла ошибка при получении списка услуг.")
 	}
 
@@ -290,7 +299,7 @@ func (h *Handler) sendServiceSelection(chatID int64) {
 }
 
 func (h *Handler) sendDateSelection(chatID int64) {
-	availableDates, err := h.service.GetAvailableDates()
+	availableDates, err := h.service.GetWorkingHoursAvailableDates()
 	if err != nil {
 		log.Printf("Error getting available dates: %v", err)
 		h.sendMessage(chatID, "Произошла ошибка при получении доступных дат.")
@@ -318,7 +327,7 @@ func (h *Handler) sendTimeSelection(chatID int64, userID int64) {
 	state := h.bookingStates[userID]
 	serviceIDs := []uuid.UUID{uuid.MustParse(state.ServiceID)}
 
-	availableSlots, err := h.service.GetAvailableSlots(serviceIDs, state.Date)
+	availableSlots, err := h.service.GetWorkingHoursAvailableSlots(serviceIDs, state.Date)
 	if err != nil {
 		log.Printf("Error getting available time slots: %v", err)
 		h.sendMessage(chatID, "Произошла ошибка при получении доступных временных слотов.")
@@ -350,15 +359,11 @@ func (h *Handler) sendBookingConfirmation(chatID int64, userID int64) {
 		h.sendMessage(chatID, "Некорректный идентификатор услуги.")
 	}
 
-	fmt.Println("serviceID", serviceID)
-
 	service, err := h.service.GetServiceByID(serviceID)
 	if err != nil {
 		log.Printf("Error getting service: %v", err)
 		h.sendMessage(chatID, "Произошла ошибка при получении информации об услуге.")
 	}
-
-	fmt.Println("service", service)
 
 	confirmationText := fmt.Sprintf(
 		"Пожалуйста, подтвердите ваше бронирование:\n\n"+
@@ -448,37 +453,18 @@ func (h *Handler) handleBookingConfirmation(chatID int64, userID int64) {
 	delete(h.bookingStates, userID)
 }
 
-func (h *Handler) handleBookingCancellation(chatID int64, userID int64) {
-	delete(h.bookingStates, userID)
-	h.sendMessage(chatID, "Бронирование отменено. Если хотите начать заново, используйте команду /book.")
-}
-
 // ==================================
 
 func (h *Handler) handleMyAppointments(update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 	userID := update.Message.From.ID
 
-	client, err := h.service.GetClientByTelegramID(userID)
-	if err != nil {
-		log.Printf("Error getting client: %v", err)
-		h.sendMessage(chatID, "Произошла ошибка при получении информации о клиенте. Попробуйте позже.")
-		return
-	}
-
-	if client == nil {
-		h.sendMessage(chatID, "Вы не зарегистрированы. Используйте /start для регистрации.")
-		return
-	}
-
-	appointments, err := h.service.GetClientAppointments(client.UUID)
+	appointments, err := h.service.GetClientAppointments(userID)
 	if err != nil {
 		log.Printf("Error getting appointments: %v", err)
 		h.sendMessage(chatID, "Не удалось получить ваши записи. Попробуйте позже.")
 		return
 	}
-
-	fmt.Println("appointments", appointments)
 
 	if len(appointments) == 0 {
 		h.sendMessage(chatID, "У вас нет активных записей. Используйте /book для записи.")
@@ -513,11 +499,12 @@ func (h *Handler) sendAppointmentsList(chatID int64, appointments []common.Appoi
 		keyboard = append(keyboard, navigationRow)
 	}
 
-	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
-		tgbotapi.NewInlineKeyboardButtonData("Новая запись", "new_appointment"),
-	})
+	// TODO: Добавить кнопку "Новая запись"
+	// keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
+	// 	tgbotapi.NewInlineKeyboardButtonData("Новая запись", ""),
+	// })
 
-	msg := tgbotapi.NewMessage(chatID, "Ваши активные записи:")
+	msg := tgbotapi.NewMessage(chatID, "Все ваши записи:")
 	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
 	h.bot.Send(msg)
 }
@@ -527,15 +514,14 @@ func (h *Handler) handleAppointmentSelection(chatID int64, appointmentID string)
 	if err != nil {
 		log.Printf("Error getting appointment: %v", err)
 		h.sendMessage(chatID, "Не удалось получить информацию о записи.")
-		return
 	}
 
 	messageText := fmt.Sprintf(
-		"Детали записи:\n"+
-			"🗓 Дата: %s\n"+
-			"🕒 Время: %s - %s\n"+
-			"💇 Услуга: %s\n"+
-			"💰 Стоимость: %.2f руб.\n"+
+		"Детали записи:\n\n"+
+			"🗓 Дата: %s\n\n"+
+			"🕒 Время: %s - %s\n\n"+
+			"💇 Услуга: %s\n\n"+
+			"💰 Стоимость: %.2f руб.\n\n"+
 			"📊 Статус: %s",
 		appointment.StartTime.Format("02.01.2006"),
 		appointment.StartTime.Format("15:04"),
@@ -570,14 +556,71 @@ func getStatusEmoji(status string) string {
 	}
 }
 
-func (h *Handler) handleAppointmentCancellation(chatID int64, appointmentID string) {
-	err := h.service.CancelAppointment(uuid.MustParse(appointmentID))
+// ==================================
+
+func (h *Handler) handleCancel(update tgbotapi.Update) {
+	chatID := update.Message.Chat.ID
+	userID := update.Message.From.ID
+
+	appointments, err := h.service.GetClientScheduledAppointmentsByID(userID)
+	if err != nil {
+		log.Printf("Error getting appointments: %v", err)
+		h.sendMessage(chatID, "Не удалось получить ваши записи. Попробуйте позже.")
+		return
+	}
+
+	// Если записей нет
+	if len(appointments) == 0 {
+		h.sendMessage(chatID, "У вас нет активных записей для отмены.")
+		return
+	}
+
+	// Формируем список записей для выбора
+	var keyboard [][]tgbotapi.InlineKeyboardButton
+	for _, appointment := range appointments {
+		buttonText := fmt.Sprintf("%s - %s", appointment.StartTime.Format("02.01 15:04"), appointment.Name)
+		callbackData := fmt.Sprintf("cancel:%s", appointment.UUID)
+		button := tgbotapi.NewInlineKeyboardButtonData(buttonText, callbackData)
+		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{button})
+	}
+
+	// Добавляем кнопку для выхода
+	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("Назад", "back_to_appointments"),
+	})
+
+	// Отправляем сообщение с выбором записи для отмены
+	msg := tgbotapi.NewMessage(chatID, "Выберите запись для отмены:")
+	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
+	h.bot.Send(msg)
+}
+
+func (h *Handler) handleAppointmentCancellation(chatID int64, userID int64, appointmentID string) {
+	uuid, err := uuid.Parse(appointmentID)
+	if err != nil {
+		h.sendMessage(chatID, "Неверный идентификатор записи.")
+		return
+	}
+
+	err = h.service.CancelAppointment(userID, uuid)
 	if err != nil {
 		log.Printf("Error cancelling appointment: %v", err)
-		h.sendMessage(chatID, "Произошла ошибка при отмене записи.")
+		h.sendMessage(chatID, "Произошла ошибка при отмене записи: "+err.Error())
 		return
 	}
 
 	h.sendMessage(chatID, "Ваша запись успешно отменена.")
-	h.handleMyAppointments(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}}})
+	h.handleMyAppointments(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
+}
+
+func (h *Handler) handleBookingCancellation(chatID int64, userID int64) {
+	delete(h.bookingStates, userID)
+	h.sendMessage(chatID, "Бронирование отменено. Если хотите начать заново, используйте команду /book.")
+}
+
+// ==================================
+
+func (h *Handler) handleReschedule(update tgbotapi.Update) {
+	// TODO: Реализовать функцию переноса записи
+	h.sendMessage(update.Message.Chat.ID, "Функция переноса записи будет доступна в ближайшее время.")
 }
