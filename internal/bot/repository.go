@@ -88,7 +88,7 @@ func (r *Repository) GetServicesByIDs(serviceIDs []uuid.UUID) ([]common.Service,
 
 // ===============WorkingHours===================
 
-func (r *Repository) GetWorkingHours(dayOfWeek int) (*common.WorkingHours, error) {
+func (r *Repository) GetWorkingHoursByDayOfWeek(dayOfWeek int) (*common.WorkingHours, error) {
 	var workingHours common.WorkingHours
 	err := r.db.Where("day_of_week = ? AND is_active = ?", dayOfWeek, true).First(&workingHours).Error
 	return &workingHours, err
@@ -98,4 +98,10 @@ func (r *Repository) GetWorkingHoursAvailableDates() ([]common.WorkingHours, err
 	var workingHours []common.WorkingHours
 	err := r.db.Where("is_active = ?", true).Find(&workingHours).Error
 	return workingHours, err
+}
+
+func (r *Repository) GetWorkingHours() ([]common.WorkingHours, error) {
+	var workingHours common.WorkingHours
+	err := r.db.Find(&workingHours).Error
+	return []common.WorkingHours{workingHours}, err
 }

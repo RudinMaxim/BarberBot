@@ -23,6 +23,7 @@ const (
 
 var commands = []tgbotapi.BotCommand{
 	{Command: "home", Description: "На главную"},
+	{Command: "location", Description: "Наша локация"},
 	{Command: "help", Description: "Помощь"},
 	{Command: "services", Description: "Услуги"},
 	{Command: "book", Description: "Записаться"},
@@ -30,7 +31,7 @@ var commands = []tgbotapi.BotCommand{
 	{Command: "cancel", Description: "Отменить запись"},
 	{Command: "reschedule", Description: "Перенести запись"},
 	{Command: "about", Description: "О мне"},
-	{Command: "contact_master", Description: "Контакты мастера"},
+	{Command: "contact", Description: "Контакты мастера"},
 }
 
 type BookingState struct {
@@ -85,6 +86,8 @@ func (h *Handler) handleCommand(update tgbotapi.Update) {
 	switch update.Message.Command() {
 	case "start":
 		h.handleStart(update)
+	case "location":
+		h.handleLocation(update)
 	case "home":
 		h.handleHome(update)
 	case "help":
@@ -126,8 +129,8 @@ func (h *Handler) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 		}
 	case "confirm_booking":
 		h.handleBookingConfirmation(chatID, userID)
-	case "cancel_booking":
-		h.handleBookingCancellation(chatID, userID)
+	case "go_home":
+		h.handleHome(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
 	case "back_to_services":
 		h.bookingStates[userID].Step = stepSelectService
 		h.sendServiceSelection(chatID)
@@ -157,10 +160,6 @@ func (h *Handler) sendMessage(chatID int64, text string) {
 
 // ================Static==================
 
-func (h *Handler) sendWelcomeMessage(update tgbotapi.Update) {
-	h.sendMessage(update.Message.Chat.ID, helper.GetText("welcome_message"))
-}
-
 func (h *Handler) handleUnknownCommand(update tgbotapi.Update) {
 	h.sendMessage(update.Message.Chat.ID, helper.GetText("unknown_command"))
 }
@@ -184,6 +183,21 @@ func (h *Handler) handleAbout(update tgbotapi.Update) {
 func (h *Handler) handleHome(update tgbotapi.Update) {
 	h.sendMessage(update.Message.Chat.ID, helper.GetText("home_message"))
 }
+func (h *Handler) handleLocation(update tgbotapi.Update) {
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, helper.GetText("location_message"))
+
+	button := tgbotapi.NewInlineKeyboardButtonURL("Открыть в Yandex Maps", "https://yandex.ru/maps/-/CDdRZLYM")
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(button))
+
+	// Добавляем кнопку в сообщение
+	msg.ReplyMarkup = keyboard
+
+	// Отправляем сообщение
+	_, err := h.bot.Send(msg)
+	if err != nil {
+		log.Printf("Error sending location message: %v", err)
+	}
+}
 
 // ================Dynamic==================
 
@@ -200,7 +214,7 @@ func (h *Handler) handleStart(update tgbotapi.Update) {
 	}
 
 	h.sendMessage(chatID, helper.GetFormattedMessage("hello_user", firstName))
-	h.sendWelcomeMessage(update)
+	h.handleHome(update)
 }
 
 func (h *Handler) handleContact(update tgbotapi.Update) {
@@ -231,7 +245,7 @@ func (h *Handler) handleContact(update tgbotapi.Update) {
 	}
 
 	h.sendMessage(message.Chat.ID, helper.GetFormattedMessage("registration_complete", message.From.FirstName))
-	h.sendWelcomeMessage(update)
+	h.handleHome(update)
 }
 
 func (h *Handler) requestContact(chatID int64) {
@@ -286,8 +300,7 @@ func (h *Handler) sendServiceSelection(chatID int64) {
 		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{button})
 	}
 	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
-		// TODO перенаправлять на главную страницу
-		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), "cancel_booking"),
+		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), "go_home"),
 	})
 
 	msg := tgbotapi.NewMessage(chatID, helper.GetText("select_service"))
@@ -313,8 +326,7 @@ func (h *Handler) sendDateSelection(chatID int64) {
 	}
 	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
 		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("back_button"), "back_to_services"),
-		// TODO перенаправлять на главную страницу
-		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), "cancel_booking"),
+		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), "go_home"),
 	})
 
 	msg := tgbotapi.NewMessage(chatID, helper.GetText("select_date"))
@@ -343,8 +355,7 @@ func (h *Handler) sendTimeSelection(chatID int64, userID int64) {
 	}
 	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
 		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("back_button"), "back_to_dates"),
-		// TODO перенаправлять на главную страницу
-		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), "cancel_booking"),
+		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), "go_home"),
 	})
 
 	msg := tgbotapi.NewMessage(chatID, helper.GetText("select_time"))
@@ -384,7 +395,7 @@ func (h *Handler) sendBookingConfirmation(chatID int64, userID int64) {
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData(helper.GetText("confirm_button"), "confirm_booking"),
-			tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), "cancel_booking"),
+			tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), "go_home"),
 		),
 	)
 
@@ -541,7 +552,7 @@ func (h *Handler) handleAppointmentSelection(chatID int64, appointmentID string)
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), fmt.Sprintf("cancel:%s", appointmentID)),
+			tgbotapi.NewInlineKeyboardButtonData("Отменить", fmt.Sprintf("cancel:%s", appointmentID)),
 			tgbotapi.NewInlineKeyboardButtonData(helper.GetText("back_button"), "back_to_appointments"),
 		),
 	)
@@ -629,7 +640,7 @@ func (h *Handler) handleReschedule(update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 	// userID := update.Message.From.ID
 
-	h.sendMessage(chatID, "Функция находится на этапе разработки")
+	h.sendMessage(chatID, " Функция находится на этапе разработки")
 
 	// appointments, err := h.service.GetClientScheduledAppointmentsByID(userID)
 	// if err != nil {

@@ -209,8 +209,12 @@ func (s *Service) GetWorkingHoursAvailableDates() ([]time.Time, error) {
 	return availableDates, nil
 }
 
+func (s *Service) GetWorkingHours() ([]common.WorkingHours, error) {
+	return s.repo.GetWorkingHours()
+}
+
 func (s *Service) GetWorkingHoursAvailableSlots(serviceIDs []uuid.UUID, date time.Time) ([]time.Time, error) {
-	workingHours, err := s.repo.GetWorkingHours(int(date.Weekday()))
+	workingHours, err := s.repo.GetWorkingHoursByDayOfWeek(int(date.Weekday()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get working hours: %w", err)
 	}
