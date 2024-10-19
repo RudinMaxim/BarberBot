@@ -145,6 +145,45 @@ func (s *Service) CreateAppointment(userID int64, timeStr string) (*common.Appoi
 	return appointment, s.repo.CreateAppointment(appointment)
 }
 
+func (s *Service) RescheduleAppointment(telegramID int64, appointmentID uuid.UUID, newDate time.Time, newTimeStr string) error {
+	client, err := s.GetClientBy("telegram_id", telegramID)
+	if err != nil {
+		return fmt.Errorf("failed to get client: %w", err)
+	}
+
+	appointment, err := s.repo.GetAppointmentByID(appointmentID)
+	if err != nil {
+		return fmt.Errorf("failed to get appointment: %w", err)
+	}
+
+	if appointment.ClientID != client.UUID {
+		return errors.New("appointment does not belong to this client")
+	}
+
+	if appointment.Status != "scheduled" {
+		return errors.New("only scheduled appointments can be rescheduled")
+	}
+
+	layout := "2006-01-02 15:04"
+	newStartTime, err := time.Parse(layout, fmt.Sprintf("%s %s", newDate.Format("2006-01-02"), newTimeStr))
+	if err != nil {
+		return fmt.Errorf("failed to parse new time: %w", err)
+	}
+
+	if newStartTime.Before(time.Now()) {
+		return errors.New("cannot reschedule to a past time")
+	}
+
+	serviceDuration := appointment.EndTime.Sub(appointment.StartTime)
+	newEndTime := newStartTime.Add(serviceDuration)
+
+	appointment.StartTime = newStartTime
+	appointment.EndTime = newEndTime
+	appointment.UpdatedAt = time.Now()
+
+	return s.repo.UpdateAppointment(appointment)
+}
+
 // ===============WorkingHours==================
 
 func (s *Service) GetWorkingHoursAvailableDates() ([]time.Time, error) {

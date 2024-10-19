@@ -24,7 +24,6 @@ func (r *Repository) CreateClient(client *common.Client) (*common.Client, error)
 	return client, err
 }
 
-// Универсальная функция для получения клиента
 func (r *Repository) GetClientBy(field string, value interface{}) (*common.Client, error) {
 	var client common.Client
 	err := r.db.Where(fmt.Sprintf("%s = ?", field), value).First(&client).Error
