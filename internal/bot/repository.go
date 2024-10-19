@@ -31,19 +31,6 @@ func (r *Repository) GetClientBy(field string, value interface{}) (*common.Clien
 	return &client, err
 }
 
-// Упрощенные методы получения клиента
-func (r *Repository) GetClientByTelegramID(telegramID int64) (*common.Client, error) {
-	return r.GetClientBy("telegram_id", telegramID)
-}
-
-func (r *Repository) GetClientByPhone(phone string) (*common.Client, error) {
-	return r.GetClientBy("phone", phone)
-}
-
-func (r *Repository) GetClientByEmail(email string) (*common.Client, error) {
-	return r.GetClientBy("email", email)
-}
-
 // ===============Appointment===================
 
 func (r *Repository) CreateAppointment(appointment *common.Appointment) error {

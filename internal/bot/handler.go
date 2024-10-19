@@ -193,7 +193,7 @@ func (h *Handler) handleStart(update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 	userID := update.Message.From.ID
 
-	client, err := h.service.GetClientByTelegramID(userID)
+	client, err := h.service.GetClientBy("telegram_id", userID)
 	if err != nil {
 		log.Printf("Error getting client: %v", err)
 	}
@@ -258,7 +258,7 @@ func (h *Handler) handleBook(update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
 	userID := update.Message.From.ID
 
-	client, err := h.service.GetClientByTelegramID(userID)
+	client, err := h.service.GetClientBy("telegram_id", userID)
 	if err != nil {
 		log.Printf("Error getting client: %v", err)
 		h.sendMessage(chatID, "Произошла ошибка при получении информации о клиенте.")

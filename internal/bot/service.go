@@ -36,51 +36,27 @@ func (s *Service) CreateClient(client *common.Client) (*common.Client, error) {
 	client.UpdatedAt = time.Now()
 	client.IsActive = true
 
-	createdClient, err := s.repo.CreateClient(client)
-	if err != nil {
-		return nil, err
-	}
-
-	return createdClient, nil
+	return s.repo.CreateClient(client)
 }
 
-func (s *Service) GetClientByTelegramID(telegramID int64) (*common.Client, error) {
-	return s.repo.GetClientByTelegramID(telegramID)
-}
-
-func (s *Service) GetClientByPhone(phone string) (*common.Client, error) {
-	return s.repo.GetClientByPhone(phone)
-}
-
-func (s *Service) GetClientByEmail(email string) (*common.Client, error) {
-	return s.repo.GetClientByEmail(email)
+func (s *Service) GetClientBy(field string, value interface{}) (*common.Client, error) {
+	return s.repo.GetClientBy(field, value)
 }
 
 func (s *Service) GetClientAppointments(telegramID int64) ([]common.Appointment, error) {
-	client, err := s.GetClientByTelegramID(telegramID)
+	client, err := s.GetClientBy("telegram_id", telegramID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
-
-	appointments, err := s.repo.GetAppointmentsByClientID(client.UUID)
-	if err != nil {
-		fmt.Errorf("failed to get appointments: %w", err)
-	}
-
-	return appointments, nil
+	return s.repo.GetAppointmentsByClientID(client.UUID)
 }
 
 func (s *Service) GetClientScheduledAppointmentsByID(telegramID int64) ([]common.Appointment, error) {
-	client, err := s.GetClientByTelegramID(telegramID)
+	client, err := s.GetClientBy("telegram_id", telegramID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
-
-	appointments, err := s.repo.GetScheduledAppointmentsByClientID(client.UUID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get appointments: %w", err)
-	}
-	return appointments, nil
+	return s.repo.GetScheduledAppointmentsByClientID(client.UUID)
 }
 
 // ===============Service==================
@@ -100,7 +76,7 @@ func (s *Service) GetAppointmentByID(appointmentID uuid.UUID) (*common.Appointme
 }
 
 func (s *Service) CancelAppointment(telegramID int64, appointmentID uuid.UUID) error {
-	client, err := s.GetClientByTelegramID(telegramID)
+	client, err := s.GetClientBy("telegram_id", telegramID)
 	if err != nil {
 		return fmt.Errorf("failed to get client: %w", err)
 	}
@@ -123,15 +99,10 @@ func (s *Service) CancelAppointment(telegramID int64, appointmentID uuid.UUID) e
 	}
 
 	appointment.Status = "cancelled"
-	appointment.CancelledAt = time.Now()
-	appointment.UpdatedAt = time.Now()
+	appointment.CancelledAt = now
+	appointment.UpdatedAt = now
 
-	err = s.repo.UpdateAppointment(appointment)
-	if err != nil {
-		return fmt.Errorf("failed to update appointment: %w", err)
-	}
-
-	return nil
+	return s.repo.UpdateAppointment(appointment)
 }
 
 func (s *Service) CreateAppointment(userID int64, timeStr string) (*common.Appointment, error) {
@@ -156,8 +127,7 @@ func (s *Service) CreateAppointment(userID int64, timeStr string) (*common.Appoi
 	}
 
 	endTime := startTime.Add(time.Duration(service.Duration) * time.Minute)
-
-	client, err := s.GetClientByTelegramID(userID)
+	client, err := s.GetClientBy("telegram_id", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -172,25 +142,18 @@ func (s *Service) CreateAppointment(userID int64, timeStr string) (*common.Appoi
 		Services:   []common.Service{service},
 	}
 
-	err = s.repo.CreateAppointment(appointment)
-	if err != nil {
-		return nil, err
-	}
-
-	return appointment, nil
+	return appointment, s.repo.CreateAppointment(appointment)
 }
 
 // ===============WorkingHours==================
 
 func (s *Service) GetWorkingHoursAvailableDates() ([]time.Time, error) {
 	workingHours, err := s.repo.GetWorkingHoursAvailableDates()
-
 	if err != nil {
-		fmt.Println("error:", err)
+		return nil, fmt.Errorf("error getting working hours: %w", err)
 	}
 
 	now := time.Now()
-
 	var availableDates []time.Time
 	for i := 0; i < POSSIBLE_RECORDS; i++ {
 		date := now.AddDate(0, 0, i)
@@ -228,30 +191,30 @@ func (s *Service) GetWorkingHoursAvailableSlots(serviceIDs []uuid.UUID, date tim
 		totalDuration += service.Duration
 	}
 
-	availableSlots := []time.Time{}
+	var availableSlots []time.Time
 	currentTime := time.Date(date.Year(), date.Month(), date.Day(), workingHours.StartTime.Hour(), workingHours.StartTime.Minute(), 0, 0, date.Location())
 	endTime := time.Date(date.Year(), date.Month(), date.Day(), workingHours.EndTime.Hour(), workingHours.EndTime.Minute(), 0, 0, date.Location())
 
 	for currentTime.Add(time.Duration(totalDuration)*time.Minute).Before(endTime) || currentTime.Add(time.Duration(totalDuration)*time.Minute).Equal(endTime) {
-		isAvailable := true
-		potentialEndTime := currentTime.Add(time.Duration(totalDuration) * time.Minute)
-
-		for _, appointment := range appointments {
-			if (currentTime.Before(appointment.EndTime) && potentialEndTime.After(appointment.StartTime)) ||
-				(currentTime.Equal(appointment.StartTime) || potentialEndTime.Equal(appointment.EndTime)) {
-				isAvailable = false
-				break
-			}
-		}
-
-		if isAvailable {
+		if isSlotAvailable(currentTime, totalDuration, appointments) {
 			availableSlots = append(availableSlots, currentTime)
 		}
-
 		currentTime = currentTime.Add(30 * time.Minute)
 	}
 
 	return availableSlots, nil
+}
+
+func isSlotAvailable(currentTime time.Time, totalDuration int, appointments []common.Appointment) bool {
+	potentialEndTime := currentTime.Add(time.Duration(totalDuration) * time.Minute)
+
+	for _, appointment := range appointments {
+		if (currentTime.Before(appointment.EndTime) && potentialEndTime.After(appointment.StartTime)) ||
+			(currentTime.Equal(appointment.StartTime) || potentialEndTime.Equal(appointment.EndTime)) {
+			return false
+		}
+	}
+	return true
 }
 
 // =================================

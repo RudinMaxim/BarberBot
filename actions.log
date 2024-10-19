@@ -3486,3 +3486,41 @@ ACTION: 2024/10/19 19:25:34 logger.go:25: Received callback query from user 7456
 ACTION: 2024/10/19 19:25:36 logger.go:25: Received callback query from user 745637014: confirm_booking
 ACTION: 2024/10/19 19:25:42 logger.go:25: Received message from user 745637014: /reschedule
 ACTION: 2024/10/19 19:25:46 logger.go:25: Received callback query from user 745637014: reschedule:468bbe26-d719-48dd-8fb3-75ac86bcc7c1
+ACTION: 2024/10/19 19:42:21 logger.go:25: Initializing application...
+ACTION: 2024/10/19 19:42:21 logger.go:25: Initializing configuration...
+ACTION: 2024/10/19 19:42:21 logger.go:25: Configuration initialized
+ACTION: 2024/10/19 19:42:21 logger.go:25: Initializing database...
+ACTION: 2024/10/19 19:42:21 logger.go:25: Database initialized
+ACTION: 2024/10/19 19:42:21 logger.go:25: Initializing bot...
+ACTION: 2024/10/19 19:42:21 logger.go:25: Creating new BotAPI instance...
+ACTION: 2024/10/19 19:42:21 logger.go:25: BotAPI instance created successfully
+ACTION: 2024/10/19 19:42:21 logger.go:25: Bot initialized
+ACTION: 2024/10/19 19:42:21 logger.go:25: Bot components created
+ACTION: 2024/10/19 19:42:21 logger.go:25: Bot started
+ACTION: 2024/10/19 19:42:21 logger.go:25: Starting to receive updates...
+ACTION: 2024/10/19 19:42:25 logger.go:25: Received message from user 745637014: /start
+ACTION: 2024/10/19 19:42:27 logger.go:25: Received message from user 745637014: /book
+ACTION: 2024/10/19 19:42:30 logger.go:25: Received callback query from user 745637014: service:e090ba12-df6f-4d5b-86d7-f769504b2042
+ACTION: 2024/10/19 19:42:32 logger.go:25: Received callback query from user 745637014: date:2024-11-16
+ACTION: 2024/10/19 19:42:36 logger.go:25: Received callback query from user 745637014: time:19:30
+ACTION: 2024/10/19 19:42:37 logger.go:25: Received callback query from user 745637014: confirm_booking
+ACTION: 2024/10/19 19:49:05 logger.go:25: Initializing application...
+ACTION: 2024/10/19 19:49:05 logger.go:25: Initializing configuration...
+ACTION: 2024/10/19 19:49:05 logger.go:25: Configuration initialized
+ACTION: 2024/10/19 19:49:05 logger.go:25: Initializing database...
+ACTION: 2024/10/19 19:49:06 logger.go:25: Database initialized
+ACTION: 2024/10/19 19:49:06 logger.go:25: Initializing bot...
+ACTION: 2024/10/19 19:49:06 logger.go:25: Creating new BotAPI instance...
+ACTION: 2024/10/19 19:49:06 logger.go:25: BotAPI instance created successfully
+ACTION: 2024/10/19 19:49:06 logger.go:25: Bot initialized
+ACTION: 2024/10/19 19:49:06 logger.go:25: Bot components created
+ACTION: 2024/10/19 19:49:06 logger.go:25: Bot started
+ACTION: 2024/10/19 19:49:06 logger.go:25: Starting to receive updates...
+ACTION: 2024/10/19 19:49:14 logger.go:25: Received message from user 745637014: /start
+ACTION: 2024/10/19 19:49:20 logger.go:25: Received message from user 745637014: /book
+ACTION: 2024/10/19 19:49:23 logger.go:25: Received callback query from user 745637014: service:050951ff-4317-45ae-94e0-4175149d1c9f
+ACTION: 2024/10/19 19:49:25 logger.go:25: Received callback query from user 745637014: date:2024-11-02
+ACTION: 2024/10/19 19:49:27 logger.go:25: Received callback query from user 745637014: time:19:00
+ACTION: 2024/10/19 19:49:30 logger.go:25: Received callback query from user 745637014: confirm_booking
+ACTION: 2024/10/19 19:49:38 logger.go:25: Received message from user 745637014: /cancel
+ACTION: 2024/10/19 19:49:42 logger.go:25: Received callback query from user 745637014: back_to_appointments
