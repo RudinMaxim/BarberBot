@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -53,7 +54,59 @@ func (r *Repository) GetClientByEmail(email string) (*common.Client, error) {
 }
 
 func (r *Repository) CreateAppointment(appointment *common.Appointment) error {
-	return r.db.Create(appointment).Error
+	query := `
+	INSERT INTO appointments (
+		client_id,
+		service_ids,
+		start_time,
+		end_time,
+		name,
+		total_price,
+		status,
+		created_at,
+		updated_at,
+		cancelled_at
+	) VALUES (
+		$1,
+		$2,
+		$3,
+		$4,
+		$5,
+		$6,
+		$7,
+		$8,
+		$9,
+		$10
+	) RETURNING uuid`
+
+	serviceIDsArray := fmt.Sprintf("{%s}", appointment.ServiceIDs[0])
+	now := time.Now().Format("2006-01-02 15:04:05-07")
+
+	var uuidStr string
+	err := r.db.Raw(query,
+		appointment.ClientID,
+		serviceIDsArray,
+		appointment.StartTime,
+		appointment.EndTime,
+		appointment.Name,
+		appointment.TotalPrice,
+		appointment.Status,
+		now,
+		now,
+		sql.NullTime{},
+	).Scan(&uuidStr).Error
+
+	if err != nil {
+		return fmt.Errorf("failed to execute create appointment query: %w", err)
+	}
+
+	appointmentUUID, err := uuid.Parse(uuidStr)
+	if err != nil {
+		return fmt.Errorf("failed to parse returned UUID: %w", err)
+	}
+
+	appointment.UUID = appointmentUUID
+	return nil
 }
 
 func (r *Repository) GetClientAppointments(clientID uuid.UUID) ([]common.Appointment, error) {

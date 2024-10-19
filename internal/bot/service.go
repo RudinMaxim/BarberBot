@@ -70,6 +70,10 @@ func (s *Service) GetClientAppointments(clientID uuid.UUID) ([]common.Appointmen
 	return s.repo.GetClientAppointments(clientID)
 }
 
+func (s *Service) GetAppointmentByID(appointmentID uuid.UUID) (*common.Appointment, error) {
+	return s.repo.GetAppointmentByID(appointmentID)
+}
+
 func (s *Service) GetActiveServices() ([]common.Service, error) {
 	return s.repo.GetActiveServices()
 }
