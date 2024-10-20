@@ -3,6 +3,7 @@ package bot
 import (
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,9 +64,16 @@ func (h *Handler) HandleUpdate(update tgbotapi.Update) {
 		return
 	}
 
-	_, err := h.bot.Send(tgbotapi.NewSetMyCommands(commands...))
+	resp, err := h.bot.Request(tgbotapi.NewSetMyCommands(commands...))
 	if err != nil {
-		log.Printf("Error selected menu: %v", err)
+		log.Printf("Error setting commands: %v", err)
+		return
+	}
+
+	if resp.Ok {
+		log.Println("Commands were set successfully.")
+	} else {
+		log.Printf("Failed to set commands: %s", resp.Description)
 	}
 
 	if update.Message != nil {
@@ -110,22 +118,29 @@ func (h *Handler) handleCommand(update tgbotapi.Update) {
 		h.handleUnknownCommand(update)
 	}
 }
+
 func (h *Handler) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 	chatID := callbackQuery.Message.Chat.ID
 	userID := callbackQuery.From.ID
 
 	parts := strings.SplitN(callbackQuery.Data, ":", 2)
+	if len(parts) != 2 {
+		return
+	}
 
-	switch parts[0] {
+	action := parts[0]
+	data := parts[1]
+
+	switch action {
 	case "service":
-		h.handleServiceSelection(chatID, userID, parts[1])
+		h.handleServiceSelection(chatID, userID, data)
 	case "date":
-		h.handleDateSelection(chatID, userID, parts[1])
+		h.handleDateSelection(chatID, userID, data)
 	case "time":
 		if h.bookingStates[userID].AppointmentID != "" {
-			h.handleRescheduleTimeSelection(chatID, userID, parts[1])
+			h.handleRescheduleTimeSelection(chatID, userID, data)
 		} else {
-			h.handleTimeSelection(chatID, userID, parts[1])
+			h.handleTimeSelection(chatID, userID, data)
 		}
 	case "confirm_booking":
 		h.handleBookingConfirmation(chatID, userID)
@@ -138,13 +153,27 @@ func (h *Handler) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 		h.bookingStates[userID].Step = stepSelectDate
 		h.sendDateSelection(chatID)
 	case "appointment":
-		h.handleAppointmentSelection(chatID, parts[1])
+		h.handleAppointmentSelection(chatID, data)
 	case "cancel":
-		h.handleAppointmentCancellation(chatID, userID, parts[1])
+		h.handleAppointmentCancellation(chatID, userID, data)
 	case "reschedule":
-		h.handleAppointmentReschedule(chatID, userID, parts[1])
+		h.handleAppointmentReschedule(chatID, userID, data)
 	case "back_to_appointments":
 		h.handleMyAppointments(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
+	case "page":
+		page, err := strconv.Atoi(data)
+		if err != nil {
+			log.Printf("Error parsing page number: %v", err)
+			return
+		}
+		appointments, err := h.service.GetClientAppointments(int64(userID))
+		if err != nil {
+			log.Printf("Error getting appointments: %v", err)
+			return
+		}
+		h.sendAppointmentsPage(chatID, appointments, page, callbackQuery.Message.MessageID)
+	case "new_appointment":
+		h.handleBook(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
 	default:
 		h.handleUnknownCommand(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
 	}
@@ -189,10 +218,8 @@ func (h *Handler) handleLocation(update tgbotapi.Update) {
 	button := tgbotapi.NewInlineKeyboardButtonURL("Открыть в Yandex Maps", "https://yandex.ru/maps/-/CDdRZLYM")
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(button))
 
-	// Добавляем кнопку в сообщение
 	msg.ReplyMarkup = keyboard
 
-	// Отправляем сообщение
 	_, err := h.bot.Send(msg)
 	if err != nil {
 		log.Printf("Error sending location message: %v", err)
@@ -497,34 +524,96 @@ func (h *Handler) sendAppointmentsList(chatID int64, appointments []common.Appoi
 
 	var keyboard [][]tgbotapi.InlineKeyboardButton
 
-	for i, appointment := range appointments {
-		if i%appointmentsPerPage == 0 {
-			keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{})
-		}
+	for _, appointment := range appointments[:min(appointmentsPerPage, len(appointments))] {
 		buttonText := fmt.Sprintf("%s - %s", appointment.StartTime.Format("02.01 15:04"), appointment.Name)
 		callbackData := fmt.Sprintf("appointment:%s", appointment.UUID)
 		button := tgbotapi.NewInlineKeyboardButtonData(buttonText, callbackData)
-		keyboard[i/appointmentsPerPage] = append(keyboard[i/appointmentsPerPage], button)
+		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{button})
 	}
 
+	// Add navigation buttons
+	var navigationRow []tgbotapi.InlineKeyboardButton
 	if totalPages > 1 {
-		var navigationRow []tgbotapi.InlineKeyboardButton
-		for i := 0; i < totalPages; i++ {
-			pageButton := tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("%d", i+1), fmt.Sprintf("page:%d", i))
-			navigationRow = append(navigationRow, pageButton)
+		if len(appointments) > appointmentsPerPage {
+			navigationRow = append(navigationRow, tgbotapi.NewInlineKeyboardButtonData("➡️", fmt.Sprintf("page:1")))
 		}
+	}
+
+	if len(navigationRow) > 0 {
 		keyboard = append(keyboard, navigationRow)
 	}
-
-	// TODO: Добавить кнопку "Новая запись"
-	// keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
-	// 	tgbotapi.NewInlineKeyboardButtonData("Новая запись", ""),
-	// })
 
 	msg := tgbotapi.NewMessage(chatID, helper.GetText("select_appointment"))
 	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
 
 	h.bot.Send(msg)
+}
+
+func (h *Handler) handleAppointmentsPageChange(query *tgbotapi.CallbackQuery) {
+	parts := strings.SplitN(query.Data, ":", 2)
+	if len(parts) != 2 {
+		return
+	}
+
+	pageStr := parts[1]
+	page, err := strconv.Atoi(pageStr)
+	if err != nil {
+		return
+	}
+
+	userID := query.From.ID
+	appointments, err := h.service.GetClientAppointments(int64(userID))
+	if err != nil {
+		log.Printf("Error getting appointments: %v", err)
+		return
+	}
+
+	h.sendAppointmentsPage(query.Message.Chat.ID, appointments, page, query.Message.MessageID)
+}
+
+func (h *Handler) sendAppointmentsPage(chatID int64, appointments []common.Appointment, page int, messageID int) {
+	const appointmentsPerPage = 5
+	totalPages := (len(appointments) + appointmentsPerPage - 1) / appointmentsPerPage
+
+	startIndex := (page - 1) * appointmentsPerPage
+	endIndex := min(startIndex+appointmentsPerPage, len(appointments))
+
+	var keyboard [][]tgbotapi.InlineKeyboardButton
+
+	for _, appointment := range appointments[startIndex:endIndex] {
+		buttonText := fmt.Sprintf("%s - %s", appointment.StartTime.Format("02.01 15:04"), appointment.Name)
+		callbackData := fmt.Sprintf("appointment:%s", appointment.UUID)
+		button := tgbotapi.NewInlineKeyboardButtonData(buttonText, callbackData)
+		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{button})
+	}
+
+	// Add navigation buttons
+	var navigationRow []tgbotapi.InlineKeyboardButton
+	if page > 1 {
+		navigationRow = append(navigationRow, tgbotapi.NewInlineKeyboardButtonData("⬅️", fmt.Sprintf("page:%d", page-1)))
+	}
+	if page < totalPages {
+		navigationRow = append(navigationRow, tgbotapi.NewInlineKeyboardButtonData("➡️", fmt.Sprintf("page:%d", page+1)))
+	}
+
+	if len(navigationRow) > 0 {
+		keyboard = append(keyboard, navigationRow)
+	}
+
+	msg := tgbotapi.NewEditMessageText(chatID, messageID, helper.GetText("select_appointment"))
+	msg.ReplyMarkup = &tgbotapi.InlineKeyboardMarkup{InlineKeyboard: keyboard}
+
+	_, err := h.bot.Send(msg)
+	if err != nil {
+		log.Printf("Error sending edited message: %v", err)
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (h *Handler) handleAppointmentSelection(chatID int64, appointmentID string) {
