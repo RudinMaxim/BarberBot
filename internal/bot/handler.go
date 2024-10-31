@@ -98,6 +98,8 @@ func (h *Handler) handleCommand(update tgbotapi.Update) {
 		h.handleLocation(update)
 	case "home":
 		h.handleHome(update)
+	case "consultation":
+		h.handleConsultation(update)
 	case "help":
 		h.handleHelp(update)
 	case "contact":
@@ -122,46 +124,62 @@ func (h *Handler) handleCommand(update tgbotapi.Update) {
 func (h *Handler) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 	chatID := callbackQuery.Message.Chat.ID
 	userID := callbackQuery.From.ID
+	data := callbackQuery.Data
 
-	parts := strings.SplitN(callbackQuery.Data, ":", 2)
+	// Обработка простых действий без параметров
+	switch data {
+	case "confirm_booking":
+		h.handleBookingConfirmation(chatID, userID)
+		return
+	case "go_home":
+		h.handleHome(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
+		return
+	case "back_to_services":
+		h.bookingStates[userID].Step = stepSelectService
+		h.sendServiceSelection(chatID)
+		return
+	case "back_to_dates":
+		h.bookingStates[userID].Step = stepSelectDate
+		h.sendDateSelection(chatID)
+		return
+	case "back_to_appointments":
+		h.handleMyAppointments(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
+		return
+	case "new_appointment":
+		h.handleBook(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
+		return
+	}
+
+	// Обработка действий с параметрами
+	parts := strings.SplitN(data, ":", 2)
 	if len(parts) != 2 {
+		log.Printf("Invalid callback data format: %s", data)
+		h.sendMessage(chatID, "Произошла ошибка при обработке команды")
 		return
 	}
 
 	action := parts[0]
-	data := parts[1]
+	value := parts[1]
 
 	switch action {
 	case "service":
-		h.handleServiceSelection(chatID, userID, data)
+		h.handleServiceSelection(chatID, userID, value)
 	case "date":
-		h.handleDateSelection(chatID, userID, data)
+		h.handleDateSelection(chatID, userID, value)
 	case "time":
 		if h.bookingStates[userID].AppointmentID != "" {
-			h.handleRescheduleTimeSelection(chatID, userID, data)
+			h.handleRescheduleTimeSelection(chatID, userID, value)
 		} else {
-			h.handleTimeSelection(chatID, userID, data)
+			h.handleTimeSelection(chatID, userID, value)
 		}
-	case "confirm_booking":
-		h.handleBookingConfirmation(chatID, userID)
-	case "go_home":
-		h.handleHome(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
-	case "back_to_services":
-		h.bookingStates[userID].Step = stepSelectService
-		h.sendServiceSelection(chatID)
-	case "back_to_dates":
-		h.bookingStates[userID].Step = stepSelectDate
-		h.sendDateSelection(chatID)
 	case "appointment":
-		h.handleAppointmentSelection(chatID, data)
+		h.handleAppointmentSelection(chatID, value)
 	case "cancel":
-		h.handleAppointmentCancellation(chatID, userID, data)
+		h.handleAppointmentCancellation(chatID, userID, value)
 	case "reschedule":
-		h.handleAppointmentReschedule(chatID, userID, data)
-	case "back_to_appointments":
-		h.handleMyAppointments(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
+		h.handleAppointmentReschedule(chatID, userID, value)
 	case "page":
-		page, err := strconv.Atoi(data)
+		page, err := strconv.Atoi(value)
 		if err != nil {
 			log.Printf("Error parsing page number: %v", err)
 			return
@@ -172,9 +190,8 @@ func (h *Handler) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 			return
 		}
 		h.sendAppointmentsPage(chatID, appointments, page, callbackQuery.Message.MessageID)
-	case "new_appointment":
-		h.handleBook(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
 	default:
+		log.Printf("Unknown callback action: %s", action)
 		h.handleUnknownCommand(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
 	}
 }
@@ -197,6 +214,10 @@ func (h *Handler) handleHelp(update tgbotapi.Update) {
 	h.sendMessage(update.Message.Chat.ID, helper.GetText("help_message"))
 }
 
+func (h *Handler) handleConsultation(update tgbotapi.Update) {
+	h.sendMessage(update.Message.Chat.ID, helper.GetText("consultation_message"))
+}
+
 func (h *Handler) handleContactMaster(update tgbotapi.Update) {
 	h.sendMessage(update.Message.Chat.ID, helper.GetText("contact_info"))
 }
@@ -212,11 +233,17 @@ func (h *Handler) handleAbout(update tgbotapi.Update) {
 func (h *Handler) handleHome(update tgbotapi.Update) {
 	h.sendMessage(update.Message.Chat.ID, helper.GetText("home_message"))
 }
+
 func (h *Handler) handleLocation(update tgbotapi.Update) {
 	msg := tgbotapi.NewMessage(update.Message.Chat.ID, helper.GetText("location_message"))
 
-	button := tgbotapi.NewInlineKeyboardButtonURL("Открыть в Yandex Maps", "https://yandex.ru/maps/-/CDdRZLYM")
-	keyboard := tgbotapi.NewInlineKeyboardMarkup(tgbotapi.NewInlineKeyboardRow(button))
+	yandexButton := tgbotapi.NewInlineKeyboardButtonURL("Открыть в Yandex Maps", "https://yandex.ru/maps/-/CDdRZLYM")
+
+	dgisButton := tgbotapi.NewInlineKeyboardButtonURL("Открыть в 2GIS", "https://go.2gis.com/ofrhv")
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(yandexButton, dgisButton),
+	)
 
 	msg.ReplyMarkup = keyboard
 
@@ -474,6 +501,7 @@ func (h *Handler) handleTimeSelection(chatID int64, userID int64, timeStr string
 func (h *Handler) handleBookingConfirmation(chatID int64, userID int64) {
 	stateTime := h.bookingStates[userID].Time
 	appointment, err := h.service.CreateAppointment(userID, stateTime)
+	log.Printf("Appointment created: %+v", appointment)
 	if err != nil {
 		log.Printf("Error creating appointment: %v", err)
 		h.sendMessage(chatID, helper.GetText("invalid_create_appointment"))
