@@ -5470,3 +5470,37 @@ ACTION: 2024/11/01 20:14:19 logger.go:25: Received callback query from user 1269
 ACTION: 2024/11/01 20:14:22 logger.go:25: Received callback query from user 1269123559: date:2024-11-02
 ACTION: 2024/11/01 20:14:24 logger.go:25: Received callback query from user 1269123559: time:18:30
 ACTION: 2024/11/01 20:14:27 logger.go:25: Received callback query from user 1269123559: confirm_booking
+ACTION: 2024/11/01 20:14:47 logger.go:25: Initializing application...
+ACTION: 2024/11/01 20:14:47 logger.go:25: Initializing configuration...
+ACTION: 2024/11/01 20:14:47 logger.go:25: Configuration initialized
+ACTION: 2024/11/01 20:14:47 logger.go:25: Initializing database...
+ACTION: 2024/11/01 20:14:47 logger.go:25: Database initialized
+ACTION: 2024/11/01 20:14:47 logger.go:25: Initializing bot...
+ACTION: 2024/11/01 20:14:47 logger.go:25: Creating new BotAPI instance...
+ACTION: 2024/11/01 20:14:47 logger.go:25: BotAPI instance created successfully
+ACTION: 2024/11/01 20:14:47 logger.go:25: Bot initialized
+ACTION: 2024/11/01 20:14:47 logger.go:25: Bot components created
+ACTION: 2024/11/01 20:14:47 logger.go:25: Bot started
+ACTION: 2024/11/01 20:14:47 logger.go:25: Starting to receive updates...
+ACTION: 2024/11/01 20:15:12 logger.go:25: Received message from user 1269123559: /start
+ACTION: 2024/11/01 20:15:19 logger.go:25: Received message from user 1269123559: /book
+ACTION: 2024/11/01 20:15:26 logger.go:25: Received callback query from user 1269123559: service:050951ff-4317-45ae-94e0-4175149d1c9f
+ACTION: 2024/11/01 20:15:29 logger.go:25: Received callback query from user 1269123559: date:2024-11-30
+ACTION: 2024/11/01 20:15:33 logger.go:25: Received callback query from user 1269123559: time:14:00
+ACTION: 2024/11/01 20:16:13 logger.go:25: Received callback query from user 1269123559: confirm_booking
+ACTION: 2024/11/01 20:17:19 logger.go:25: Received message from user 1269123559: /cancel
+ACTION: 2024/11/01 20:17:36 logger.go:25: Received callback query from user 1269123559: cancel:dad0041a-b32f-4916-8c55-d5ef1315ee1b
+ACTION: 2024/11/01 20:17:54 logger.go:25: Received callback query from user 1269123559: appointment:d05c5ed7-c7bc-4221-84b7-bce5ea3c714f
+ACTION: 2024/11/01 20:17:59 logger.go:25: Received callback query from user 1269123559: cancel:d05c5ed7-c7bc-4221-84b7-bce5ea3c714f
+ACTION: 2024/11/01 20:18:25 logger.go:25: Received message from user 1269123559: /home
+ACTION: 2024/11/01 20:18:32 logger.go:25: Received message from user 1269123559: /services
+ACTION: 2024/11/01 20:18:44 logger.go:25: Received message from user 1269123559: /book
+ACTION: 2024/11/01 20:18:49 logger.go:25: Received callback query from user 1269123559: go_home
+ACTION: 2024/11/01 20:18:52 logger.go:25: Received message from user 1269123559: /consultation
+ACTION: 2024/11/01 20:19:14 logger.go:25: Received message from user 1269123559: /about
+ACTION: 2024/11/01 20:20:18 logger.go:25: Received message from user 1269123559: /location
+ACTION: 2024/11/01 20:21:04 logger.go:25: Received message from user 1269123559: /my_appointments
+ACTION: 2024/11/01 20:21:09 logger.go:25: Received message from user 1269123559: /help
+ACTION: 2024/11/01 20:21:14 logger.go:25: Received message from user 1269123559: /contact
+ACTION: 2024/11/01 20:21:32 logger.go:25: Received message from user 1269123559: /home
+ACTION: 2024/11/01 20:21:34 logger.go:25: Received message from user 1269123559: /book
