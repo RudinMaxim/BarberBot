@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	defaultTimeZone = "Asia/Yekaterinburg"
+	defaultTimeZone     = "Asia/Yekaterinburg"
+	alternativeTimeZone = "+05:00"
 )
 
 type GoogleCalendarService struct {
@@ -75,7 +76,6 @@ func saveToken(path string, token *oauth2.Token) {
 func NewGoogleCalendarService() (*GoogleCalendarService, error) {
 	ctx := context.Background()
 	b, err := os.ReadFile("credentials/credentials.json")
-	log.Println("Credentials file loaded", string(b))
 
 	if err != nil {
 		return nil, fmt.Errorf("не удалось прочитать файл credentials: %w", err)
@@ -99,6 +99,9 @@ func NewGoogleCalendarService() (*GoogleCalendarService, error) {
 }
 
 func (s *GoogleCalendarService) AddAppointment(appointment *common.Appointment, client *common.Client) (string, error) {
+	startTime := appointment.StartTime.Add(-5 * time.Hour)
+	endTime := appointment.EndTime.Add(-5 * time.Hour)
+
 	event := &calendar.Event{
 		Summary: fmt.Sprintf("Запись на приём: %s", client.Name),
 		Description: fmt.Sprintf(
@@ -109,12 +112,12 @@ func (s *GoogleCalendarService) AddAppointment(appointment *common.Appointment, 
 			client.Telegram,
 		),
 		Start: &calendar.EventDateTime{
-			DateTime: appointment.StartTime.Format(time.RFC3339),
-			TimeZone: defaultTimeZone,
+			DateTime: startTime.Format(time.RFC3339),
+			TimeZone: "UTC",
 		},
 		End: &calendar.EventDateTime{
-			DateTime: appointment.EndTime.Format(time.RFC3339),
-			TimeZone: defaultTimeZone,
+			DateTime: endTime.Format(time.RFC3339),
+			TimeZone: "UTC",
 		},
 		ColorId: "5",
 	}

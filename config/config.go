@@ -64,6 +64,7 @@ func createDefaultConfig() {
 	viper.SetDefault("database.max_idle_conns", 10)
 	viper.SetDefault("database.max_open_conns", 100)
 	viper.SetDefault("database.conn_max_lifetime", 3600)
+	viper.SetDefault("cache.host", os.Getenv("REDIS_HOST"))
 
 	if err := viper.SafeWriteConfig(); err != nil {
 		log.Fatalf("Error writing default config file: %v", err)

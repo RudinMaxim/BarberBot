@@ -27,7 +27,6 @@ var commands = []tgbotapi.BotCommand{
 	{Command: "home", Description: "На главную"},
 	{Command: "location", Description: "Наша локация"},
 	{Command: "help", Description: "Помощь"},
-	{Command: "services", Description: "Услуги"},
 	{Command: "book", Description: "Записаться"},
 	{Command: "my_appointments", Description: "Мои записи"},
 	{Command: "cancel", Description: "Отменить запись"},
@@ -112,8 +111,6 @@ func (h *Handler) handleCommand(update tgbotapi.Update) {
 		h.handleHelp(update)
 	case "contact":
 		h.handleContactMaster(update)
-	case "services":
-		h.handleServices(update)
 	case "about":
 		h.handleAbout(update)
 	case "book":
@@ -222,10 +219,6 @@ func (h *Handler) handleConsultation(update tgbotapi.Update) {
 
 func (h *Handler) handleContactMaster(update tgbotapi.Update) {
 	h.sendMessage(update.Message.Chat.ID, helper.GetText("contact_info"))
-}
-
-func (h *Handler) handleServices(update tgbotapi.Update) {
-	h.sendMessage(update.Message.Chat.ID, helper.GetText("services_list"))
 }
 
 func (h *Handler) handleAbout(update tgbotapi.Update) {

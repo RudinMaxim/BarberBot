@@ -1,20 +1,26 @@
 package bot
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/RudinMaxim/BarberBot.git/common"
+	"github.com/RudinMaxim/BarberBot.git/database"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type Repository struct {
-	db *gorm.DB
+	db    *gorm.DB
+	cache *database.RedisCache
 }
 
-func NewRepository(db *gorm.DB) *Repository {
-	return &Repository{db: db}
+func NewRepository(db *gorm.DB, cache *database.RedisCache) *Repository {
+	return &Repository{
+		db:    db,
+		cache: cache,
+	}
 }
 
 // ===============Client===================
@@ -25,9 +31,30 @@ func (r *Repository) CreateClient(client *common.Client) (*common.Client, error)
 }
 
 func (r *Repository) GetClientBy(field string, value interface{}) (*common.Client, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("client:%s:%v", field, value)
+
 	var client common.Client
-	err := r.db.Where(fmt.Sprintf("%s = ?", field), value).First(&client).Error
-	return &client, err
+
+	// Попытка получить данные из кэша
+	err := r.cache.Get(ctx, cacheKey, &client)
+	if err == nil {
+		return &client, nil
+	}
+
+	// Запрос к базе данных, если данных нет в кэше
+	err = r.db.Where(fmt.Sprintf("%s = ?", field), value).First(&client).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Сохраняем результат в кэш на 1 час
+	cacheDuration := time.Hour
+	if err = r.cache.Set(ctx, cacheKey, client, cacheDuration); err != nil {
+		return nil, fmt.Errorf("failed to cache data: %w", err)
+	}
+
+	return &client, nil
 }
 
 // ===============Appointment===================
@@ -37,15 +64,57 @@ func (r *Repository) CreateAppointment(appointment *common.Appointment) error {
 }
 
 func (r *Repository) GetAppointmentByID(appointmentID uuid.UUID) (*common.Appointment, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("appointment:%s", appointmentID)
+
 	var appointment common.Appointment
-	err := r.db.Preload("Services").First(&appointment, appointmentID).Error
-	return &appointment, err
+
+	// Попытка получить данные из кэша
+	err := r.cache.Get(ctx, cacheKey, &appointment)
+	if err == nil {
+		return &appointment, nil
+	}
+
+	// Запрос к базе данных, если данных нет в кэше
+	err = r.db.Preload("Services").First(&appointment, appointmentID).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Сохраняем результат в кэш на 30 минут
+	cacheDuration := 30 * time.Minute
+	if err = r.cache.Set(ctx, cacheKey, appointment, cacheDuration); err != nil {
+		return nil, fmt.Errorf("failed to cache data: %w", err)
+	}
+
+	return &appointment, nil
 }
 
 func (r *Repository) GetAppointmentsByClientID(clientID uuid.UUID) ([]common.Appointment, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("appointments:client:%s", clientID)
+
 	var appointments []common.Appointment
-	err := r.db.Where("client_id = ?", clientID).Find(&appointments).Error
-	return appointments, err
+
+	// Попытка получить данные из кэша
+	err := r.cache.Get(ctx, cacheKey, &appointments)
+	if err == nil {
+		return appointments, nil
+	}
+
+	// Запрос к базе данных, если данных нет в кэше
+	err = r.db.Where("client_id = ?", clientID).Find(&appointments).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Сохраняем результат в кэш на 30 минут
+	cacheDuration := 30 * time.Minute
+	if err = r.cache.Set(ctx, cacheKey, appointments, cacheDuration); err != nil {
+		return nil, fmt.Errorf("failed to cache data: %w", err)
+	}
+
+	return appointments, nil
 }
 
 func (r *Repository) UpdateAppointment(appointment *common.Appointment) error {
@@ -61,29 +130,113 @@ func (r *Repository) GetAppointmentsForDate(date time.Time) ([]common.Appointmen
 }
 
 func (r *Repository) GetScheduledAppointmentsByClientID(clientID uuid.UUID) ([]common.Appointment, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("scheduled_appointments:client:%s", clientID)
+
 	var appointments []common.Appointment
-	err := r.db.Where("client_id = ? AND status = ?", clientID, "scheduled").Find(&appointments).Error
-	return appointments, err
+
+	// Попытка получить данные из кэша
+	err := r.cache.Get(ctx, cacheKey, &appointments)
+	if err == nil {
+		return appointments, nil
+	}
+
+	// Запрос к базе данных, если данных нет в кэше
+	err = r.db.Where("client_id = ? AND status = ?", clientID, "scheduled").Find(&appointments).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Сохраняем результат в кэш на 30 минут
+	cacheDuration := 30 * time.Minute
+	if err = r.cache.Set(ctx, cacheKey, appointments, cacheDuration); err != nil {
+		return nil, fmt.Errorf("failed to cache data: %w", err)
+	}
+
+	return appointments, nil
 }
 
 // ===============Service===================
 
 func (r *Repository) GetServiceByID(serviceID uuid.UUID) (common.Service, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("service:%s", serviceID)
+
 	var service common.Service
-	err := r.db.First(&service, serviceID).Error
-	return service, err
+
+	// Попытка получить данные из кэша
+	err := r.cache.Get(ctx, cacheKey, &service)
+	if err == nil {
+		return service, nil
+	}
+
+	// Запрос к базе данных, если данных нет в кэше
+	err = r.db.First(&service, serviceID).Error
+	if err != nil {
+		return common.Service{}, err
+	}
+
+	// Сохраняем результат в кэш на 1 час
+	cacheDuration := time.Hour
+	if err = r.cache.Set(ctx, cacheKey, service, cacheDuration); err != nil {
+		return common.Service{}, fmt.Errorf("failed to cache data: %w", err)
+	}
+
+	return service, nil
 }
 
 func (r *Repository) GetActiveServices() ([]common.Service, error) {
+	ctx := context.Background()
+	cacheKey := "active_services"
+
 	var services []common.Service
-	err := r.db.Where("is_active = ?", true).Find(&services).Error
-	return services, err
+
+	// Попытка получить данные из кэша
+	err := r.cache.Get(ctx, cacheKey, &services)
+	if err == nil {
+		return services, nil
+	}
+
+	// Запрос к базе данных, если данных нет в кэше
+	err = r.db.Where("is_active = ?", true).Find(&services).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Сохраняем результат в кэш на 1 час
+	cacheDuration := time.Hour
+	if err = r.cache.Set(ctx, cacheKey, services, cacheDuration); err != nil {
+		return nil, fmt.Errorf("failed to cache data: %w", err)
+	}
+
+	return services, nil
 }
 
 func (r *Repository) GetServicesByIDs(serviceIDs []uuid.UUID) ([]common.Service, error) {
+	ctx := context.Background()
+	cacheKey := fmt.Sprintf("services:ids:%v", serviceIDs)
+
 	var services []common.Service
-	err := r.db.Where("uuid IN ?", serviceIDs).Find(&services).Error
-	return services, err
+
+	// Попытка получить данные из кэша
+	err := r.cache.Get(ctx, cacheKey, &services)
+	if err == nil {
+		return services, nil
+	}
+
+	// Запрос к базе данных, если данных нет в кэше
+	err = r.db.Where("uuid IN ?", serviceIDs).Find(&services).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Сохраняем результат в кэш на 1 час
+	cacheDuration := time.Hour
+	if err = r.cache.Set(ctx, cacheKey, services, cacheDuration); err != nil {
+		return nil, fmt.Errorf("failed to cache data: %w", err)
+	}
+
+	return services, nil
 }
 
 // ===============WorkingHours===================

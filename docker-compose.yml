@@ -1,15 +1,25 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  go-bot:
+  app:
     build: .
-    ports:
-      - "8080:8080"
-    environment:
-      - TZ=UTC
-    volumes:
-      - ./.env:/app/.env
-      - ./config.yaml:/app/config.yaml
-      - ./texts.yaml:/app/texts.yaml
-    restart: unless-stopped
+    depends_on:
+      - redis
+    networks:
+      - barberbot_app-network
 
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - barberbot_app-network
+
+volumes:
+  redis-data:
+
+networks:
+  barberbot_app-network:
+    driver: bridge

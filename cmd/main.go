@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/RudinMaxim/BarberBot.git/config"
 	"github.com/RudinMaxim/BarberBot.git/database"
@@ -12,8 +14,9 @@ import (
 )
 
 type application struct {
-	db  *gorm.DB
-	bot *tgbotapi.BotAPI
+	db    *gorm.DB
+	bot   *tgbotapi.BotAPI
+	cache *database.RedisCache
 }
 
 func main() {
@@ -25,7 +28,7 @@ func main() {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 
-	botRepo := bot.NewRepository(app.db)
+	botRepo := bot.NewRepository(app.db, app.cache)
 	botService := bot.NewService(botRepo)
 	botHandler := bot.NewHandler(botService, app.bot)
 
@@ -44,6 +47,12 @@ func (app *application) initialize() error {
 		return fmt.Errorf("failed to initialize database: %w", err)
 	}
 	config.LogAction("Database initialized")
+
+	config.LogAction("Initializing cache...")
+	if err := app.initCache(); err != nil {
+		return fmt.Errorf("failed to initialize cache: %w", err)
+	}
+	config.LogAction("Cache initialized")
 
 	config.LogAction("Initializing bot...")
 	if err := app.initBot(); err != nil {
@@ -78,6 +87,20 @@ func (app *application) initBot() error {
 	config.LogAction("BotAPI instance created successfully")
 
 	app.bot = bot
+	return nil
+}
+
+func (app *application) initCache() error {
+	redisCache := database.NewRedisCache("redis:6379")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := redisCache.Ping(ctx); err != nil {
+		return fmt.Errorf("failed to ping Redis: %w", err)
+	}
+
+	app.cache = redisCache
 	return nil
 }
 
