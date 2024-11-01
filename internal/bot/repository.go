@@ -105,3 +105,22 @@ func (r *Repository) GetWorkingHours() ([]common.WorkingHours, error) {
 	err := r.db.Find(&workingHours).Error
 	return []common.WorkingHours{workingHours}, err
 }
+
+func (r *Repository) SaveCalendarEventID(appointmentID uuid.UUID, eventID string) error {
+	return r.db.Model(&common.Appointment{}).
+		Where("uuid = ?", appointmentID).
+		Update("calendar_event_id", eventID).Error
+}
+
+func (r *Repository) GetCalendarEventID(appointmentID uuid.UUID) (string, error) {
+	var appointment common.Appointment
+	result := r.db.Select("calendar_event_id").
+		Where("uuid = ?", appointmentID).
+		First(&appointment)
+
+	if result.Error != nil {
+		return "", result.Error
+	}
+
+	return appointment.CalendarEventID, nil
+}

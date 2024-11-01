@@ -13,7 +13,6 @@ type Client struct {
 	Phone        string    `gorm:"uniqueIndex" json:"phone"`
 	Telegram     string    `json:"telegram"`
 	TelegramID   int64     `json:"telegram_id"`
-	Email        string    `json:"email"`
 	RegisteredAt time.Time `json:"registered_at"`
 	LastVisit    time.Time `json:"last_visit"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -24,9 +23,9 @@ type Client struct {
 // Service модель услуги
 type Service struct {
 	UUID      uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"uuid"`
-	Name      string    `gorm:"type:varchar(255);not null" json:"name"`   // Название услуги (например, "Мужская стрижка")
-	Duration  int       `gorm:"not null" json:"duration"`                 // Длительность в минутах
-	Price     float64   `gorm:"type:decimal(10,2);not null" json:"price"` // Цена услуги
+	Name      string    `gorm:"type:varchar(255);not null" json:"name"`
+	Duration  int       `gorm:"not null" json:"duration"`
+	Price     float64   `gorm:"type:decimal(10,2);not null" json:"price"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	IsActive  bool      `gorm:"default:true" json:"is_active"`
@@ -44,17 +43,18 @@ type WorkingHours struct {
 }
 
 type Appointment struct {
-	UUID        uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"uuid"`
-	ClientID    uuid.UUID `gorm:"type:uuid;not null" json:"client_id"`
-	StartTime   time.Time `gorm:"type:timestamp" json:"start_time"`
-	EndTime     time.Time `gorm:"type:timestamp" json:"end_time"`
-	Name        string    `gorm:"not null" json:"name"`
-	TotalPrice  float64   `gorm:"type:decimal(10,2);not null" json:"total_price"`
-	Status      string    `gorm:"type:varchar(20);not null" json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	CancelledAt time.Time `json:"cancelled_at,omitempty"`
-	Services    []Service `gorm:"many2many:appointment_services;" json:"services"`
+	UUID            uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"uuid"`
+	ClientID        uuid.UUID `gorm:"type:uuid;not null" json:"client_id"`
+	StartTime       time.Time `gorm:"type:timestamp" json:"start_time"`
+	EndTime         time.Time `gorm:"type:timestamp" json:"end_time"`
+	Name            string    `gorm:"not null" json:"name"`
+	TotalPrice      float64   `gorm:"type:decimal(10,2);not null" json:"total_price"`
+	Status          string    `gorm:"type:varchar(20);not null" json:"status"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	CancelledAt     time.Time `json:"cancelled_at,omitempty"`
+	Services        []Service `gorm:"many2many:appointment_services;" json:"services"`
+	CalendarEventID string    `gorm:"column:calendar_event_id"`
 }
 
 type AppointmentService struct {

@@ -315,3 +315,11 @@ func (s *Service) ClearBookingData(userID int64) {
 
 	delete(s.bookingData, userID)
 }
+
+func (s *Service) SaveCalendarEventID(appointmentID uuid.UUID, eventID string) error {
+	return s.repo.SaveCalendarEventID(appointmentID, eventID)
+}
+
+func (s *Service) GetCalendarEventID(appointmentID uuid.UUID) (string, error) {
+	return s.repo.GetCalendarEventID(appointmentID)
+}
