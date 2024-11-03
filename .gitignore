@@ -9,7 +9,7 @@
 
 credentials/credentials.json
 credentials/token.json
-
+/actions.log
 config.yaml
 # Test binary, built with `go test -c`
 *.test

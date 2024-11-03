@@ -14,9 +14,11 @@ import (
 )
 
 type application struct {
-	db    *gorm.DB
-	bot   *tgbotapi.BotAPI
-	cache *database.RedisCache
+	db     *gorm.DB
+	bot    *tgbotapi.BotAPI
+	cache  *database.RedisCache
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 func main() {
@@ -38,6 +40,11 @@ func main() {
 	app.runBot(botHandler)
 }
 func (app *application) initialize() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	app.ctx = ctx
+	app.cancel = cancel
+
 	config.LogAction("Initializing configuration...")
 	config.Init()
 	config.LogAction("Configuration initialized")
@@ -91,12 +98,9 @@ func (app *application) initBot() error {
 }
 
 func (app *application) initCache() error {
-	redisCache := database.NewRedisCache("redis:6379")
+	redisCache := database.NewRedisCache("127.0.0.1:6379")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := redisCache.Ping(ctx); err != nil {
+	if err := redisCache.Ping(app.ctx); err != nil {
 		return fmt.Errorf("failed to ping Redis: %w", err)
 	}
 
@@ -115,7 +119,7 @@ func (app *application) runBot(handler *bot.Handler) {
 		if update.Message != nil {
 			config.LogAction(fmt.Sprintf("Received message from user %d: %s", update.Message.From.ID, update.Message.Text))
 			handler.HandleUpdate(update)
-		} else if update.CallbackQuery != nil { // Добавлена обработка CallbackQuery
+		} else if update.CallbackQuery != nil {
 			config.LogAction(fmt.Sprintf("Received callback query from user %d: %s", update.CallbackQuery.From.ID, update.CallbackQuery.Data))
 			handler.HandleUpdate(update)
 		}

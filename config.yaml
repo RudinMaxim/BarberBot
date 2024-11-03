@@ -1,5 +1,5 @@
 cache:
-    host: redis:6379
+    host: 127.0.0.1:6379
 database:
     conn_max_lifetime: 3600
     host: aws-0-eu-central-1.pooler.supabase.com
