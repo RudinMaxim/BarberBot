@@ -20,7 +20,7 @@ const (
 	stepSelectTime
 	stepConfirmBooking
 	BUFFER_MINUTES   = 5
-	POSSIBLE_RECORDS = 30
+	POSSIBLE_RECORDS = 60
 )
 
 var commands = []tgbotapi.BotCommand{
