@@ -831,7 +831,7 @@ func (h *Handler) handleAppointmentCancellation(chatID int64, userID int64, appo
 	}
 
 	h.handleBookingCancellation(chatID, userID)
-	h.handleMyAppointments(tgbotapi.Update{Message: &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: chatID}, From: &tgbotapi.User{ID: userID}}})
+	h.sendMessage(chatID, helper.GetText("go_home"))
 }
 
 func (h *Handler) handleBookingCancellation(chatID int64, userID int64) {
@@ -948,7 +948,6 @@ func (h *Handler) handleRescheduleDate(chatID int64, userID int64, dateStr strin
 		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{button})
 	}
 	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
-		tgbotapi.NewInlineKeyboardButtonData("Назад", "back_to_dates"),
 		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), "go_home"),
 	})
 
@@ -1048,7 +1047,6 @@ func (h *Handler) handleRescheduleTime(chatID int64, userID int64, timeStr strin
 				notificationMessage,
 				notificationTime,
 			)
-			log.Printf("Scheduled notification for rescheduled appointment %s at %v", appointmentUUID, notificationTime)
 		}
 
 	}
