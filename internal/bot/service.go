@@ -3,6 +3,7 @@ package bot
 import (
 	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -86,6 +87,10 @@ func (s *Service) CancelAppointment(telegramID int64, appointmentID uuid.UUID) e
 		return fmt.Errorf("failed to get appointment: %w", err)
 	}
 
+	// Add debug logging
+	log.Printf("Cancelling appointment: ID=%v, Status=%v, ClientID=%v",
+		appointment.UUID, appointment.Status, appointment.ClientID)
+
 	if appointment.ClientID != client.UUID {
 		return errors.New("appointment does not belong to this client")
 	}
@@ -102,7 +107,11 @@ func (s *Service) CancelAppointment(telegramID int64, appointmentID uuid.UUID) e
 	appointment.CancelledAt = now
 	appointment.UpdatedAt = now
 
-	return s.repo.UpdateAppointment(appointment)
+	if err := s.repo.UpdateAppointment(appointment); err != nil {
+		return fmt.Errorf("failed to update appointment: %w", err)
+	}
+
+	return nil
 }
 
 func (s *Service) CreateAppointment(userID int64, timeStr string) (*common.Appointment, error) {
@@ -167,7 +176,7 @@ func (s *Service) RescheduleAppointment(telegramID int64, appointmentID uuid.UUI
 	layout := "2006-01-02 15:04"
 	newStartTime, err := time.Parse(layout, fmt.Sprintf("%s %s", newDate.Format("2006-01-02"), newTimeStr))
 	if err != nil {
-		return fmt.Errorf("failed to parse new time: %w", err)
+		return fmt.Errorf("invalid time format: %w", err)
 	}
 
 	if newStartTime.Before(time.Now()) {
@@ -177,11 +186,46 @@ func (s *Service) RescheduleAppointment(telegramID int64, appointmentID uuid.UUI
 	serviceDuration := appointment.EndTime.Sub(appointment.StartTime)
 	newEndTime := newStartTime.Add(serviceDuration)
 
+	appointments, err := s.repo.GetAppointmentsForDate(newDate)
+	if err != nil {
+		return fmt.Errorf("failed to check slot availability: %w", err)
+	}
+
+	filteredAppointments := make([]common.Appointment, 0)
+	for _, apt := range appointments {
+		if apt.UUID != appointmentID {
+			filteredAppointments = append(filteredAppointments, apt)
+		}
+	}
+
+	if !isSlotAvailable(newStartTime, int(serviceDuration.Minutes()), filteredAppointments) {
+		return errors.New("selected time slot is not available")
+	}
+
+	workingHours, err := s.repo.GetWorkingHoursByDayOfWeek(int(newStartTime.Weekday()))
+	if err != nil {
+		return fmt.Errorf("failed to get working hours: %w", err)
+	}
+
+	workStart := time.Date(newStartTime.Year(), newStartTime.Month(), newStartTime.Day(),
+		workingHours.StartTime.Hour(), workingHours.StartTime.Minute(), 0, 0, newStartTime.Location())
+	workEnd := time.Date(newStartTime.Year(), newStartTime.Month(), newStartTime.Day(),
+		workingHours.EndTime.Hour(), workingHours.EndTime.Minute(), 0, 0, newStartTime.Location())
+
+	if newStartTime.Before(workStart) || newEndTime.After(workEnd) {
+		return errors.New("selected time is outside working hours")
+	}
+
 	appointment.StartTime = newStartTime
 	appointment.EndTime = newEndTime
 	appointment.UpdatedAt = time.Now()
+	appointment.Status = "scheduled"
 
-	return s.repo.UpdateAppointment(appointment)
+	if err := s.repo.UpdateAppointment(appointment); err != nil {
+		return fmt.Errorf("failed to update appointment: %w", err)
+	}
+
+	return nil
 }
 
 // ===============WorkingHours==================
@@ -322,4 +366,26 @@ func (s *Service) SaveCalendarEventID(appointmentID uuid.UUID, eventID string) e
 
 func (s *Service) GetCalendarEventID(appointmentID uuid.UUID) (string, error) {
 	return s.repo.GetCalendarEventID(appointmentID)
+}
+
+func (s *Service) UpdateAppointmentDateTime(appointmentID uuid.UUID, newStartTime, newEndTime time.Time) error {
+	// First get the existing appointment to preserve other fields
+	existingAppointment, err := s.GetAppointmentByID(appointmentID)
+	if err != nil {
+		return fmt.Errorf("failed to get existing appointment: %w", err)
+	}
+
+	appointment := &common.Appointment{
+		UUID:       appointmentID,
+		ClientID:   existingAppointment.ClientID,
+		StartTime:  newStartTime,
+		EndTime:    newEndTime,
+		Name:       existingAppointment.Name,
+		TotalPrice: existingAppointment.TotalPrice,
+		Status:     existingAppointment.Status,
+		UpdatedAt:  time.Now(),
+		Services:   existingAppointment.Services,
+	}
+
+	return s.repo.UpdateAppointment(appointment)
 }

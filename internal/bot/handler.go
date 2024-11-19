@@ -175,6 +175,12 @@ func (h *Handler) handleCallbackQuery(callbackQuery *tgbotapi.CallbackQuery) {
 		h.handleTimeSelection(chatID, userID, value)
 	case "appointment":
 		h.handleAppointmentSelection(chatID, value)
+	case "reschedule":
+		h.handleAppointmentReschedule(chatID, userID, value)
+	case "reschedule_date":
+		h.handleRescheduleDate(chatID, userID, value)
+	case "reschedule_time":
+		h.handleRescheduleTime(chatID, userID, value)
 	case "cancel":
 		h.handleAppointmentCancellation(chatID, userID, value)
 	case "page":
@@ -719,7 +725,6 @@ func (h *Handler) handleCancel(update tgbotapi.Update) {
 		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("back_button"), "back_to_appointments"),
 	})
 
-	// Отправляем сообщение с выбором записи для отмены
 	msg := tgbotapi.NewMessage(chatID, helper.GetText("select_cancel_appointment"))
 	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
 	h.bot.Send(msg)
@@ -732,13 +737,11 @@ func (h *Handler) handleAppointmentCancellation(chatID int64, userID int64, appo
 		return
 	}
 
-	// Получаем eventID из базы данных
 	eventID, err := h.service.GetCalendarEventID(uuid)
 	if err != nil {
 		log.Printf("Error getting calendar event ID: %v", err)
 	}
 
-	// Удаляем событие из Google Calendar
 	if h.calendarService != nil && eventID != "" {
 		if calErr := h.calendarService.RemoveAppointment(eventID); calErr != nil {
 			log.Printf("Error removing event from Google Calendar: %v", calErr)
@@ -748,7 +751,7 @@ func (h *Handler) handleAppointmentCancellation(chatID int64, userID int64, appo
 	err = h.service.CancelAppointment(userID, uuid)
 	if err != nil {
 		log.Printf("Error cancelling appointment: %v", err)
-		h.sendMessage(chatID, "Произошла ошибка при отмене записи: "+err.Error())
+		h.sendMessage(chatID, "Произошла ошибка при отмене записи")
 		return
 	}
 
@@ -765,5 +768,191 @@ func (h *Handler) handleBookingCancellation(chatID int64, userID int64) {
 
 func (h *Handler) handleReschedule(update tgbotapi.Update) {
 	chatID := update.Message.Chat.ID
-	h.sendMessage(chatID, " Функция находится на этапе разработки")
+	userID := update.Message.From.ID
+
+	appointments, err := h.service.GetClientScheduledAppointmentsByID(userID)
+	if err != nil {
+		log.Printf("Error getting appointments: %v", err)
+		h.sendMessage(chatID, helper.GetText("invalid_get_appointments"))
+		return
+	}
+
+	if len(appointments) == 0 {
+		h.sendMessage(chatID, helper.GetText("no_appointments"))
+		return
+	}
+
+	var keyboard [][]tgbotapi.InlineKeyboardButton
+	for _, appointment := range appointments {
+		buttonText := fmt.Sprintf("%s - %s", appointment.StartTime.Format("02.01 15:04"), appointment.Name)
+		callbackData := fmt.Sprintf("reschedule:%s", appointment.UUID)
+		button := tgbotapi.NewInlineKeyboardButtonData(buttonText, callbackData)
+		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{button})
+	}
+
+	msg := tgbotapi.NewMessage(chatID, "Выберите запись для переноса:")
+	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
+	h.bot.Send(msg)
+}
+
+func (h *Handler) handleAppointmentReschedule(chatID int64, userID int64, appointmentID string) {
+	uuid, err := uuid.Parse(appointmentID)
+	if err != nil {
+		h.sendMessage(chatID, "Неверный идентификатор записи")
+		return
+	}
+
+	appointment, err := h.service.GetAppointmentByID(uuid)
+	if err != nil {
+		log.Printf("Error getting appointment: %v", err)
+		h.sendMessage(chatID, "Не удалось найти запись")
+		return
+	}
+
+	var serviceIDs []string
+	for _, service := range appointment.Services {
+		serviceIDs = append(serviceIDs, service.UUID.String())
+	}
+
+	h.bookingStates[userID] = &BookingState{
+		Step:          stepSelectDate,
+		ServiceID:     strings.Join(serviceIDs, ","), // Store multiple service IDs
+		AppointmentID: appointmentID,
+	}
+
+	// Get available dates for rescheduling
+	availableDates, err := h.service.GetWorkingHoursAvailableDates()
+	if err != nil {
+		log.Printf("Error getting available dates: %v", err)
+		h.sendMessage(chatID, "Не удалось получить доступные даты")
+		return
+	}
+
+	var keyboard [][]tgbotapi.InlineKeyboardButton
+	for _, date := range availableDates {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			date.Format("02.01.2006"),
+			fmt.Sprintf("reschedule_date:%s", date.Format("2006-01-02")),
+		)
+		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{button})
+	}
+	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("Отмена", "back_to_appointments"),
+	})
+
+	msg := tgbotapi.NewMessage(chatID, "Выберите новую дату:")
+	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
+	h.bot.Send(msg)
+}
+
+func (h *Handler) handleRescheduleDate(chatID int64, userID int64, dateStr string) {
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		log.Printf("Error parsing date: %v", err)
+		h.sendMessage(chatID, "Ошибка при обработке даты")
+		return
+	}
+
+	state := h.bookingStates[userID]
+	state.Date = date
+
+	serviceIDs := []uuid.UUID{uuid.MustParse(state.ServiceID)}
+	availableSlots, err := h.service.GetWorkingHoursAvailableSlots(serviceIDs, date)
+	if err != nil {
+		log.Printf("Error getting available slots: %v", err)
+		h.sendMessage(chatID, "Не удалось получить доступное время")
+		return
+	}
+
+	var keyboard [][]tgbotapi.InlineKeyboardButton
+	for _, slot := range availableSlots {
+		button := tgbotapi.NewInlineKeyboardButtonData(
+			slot.Format("15:04"),
+			fmt.Sprintf("reschedule_time:%s", slot.Format("15:04")),
+		)
+		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{button})
+	}
+	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
+		tgbotapi.NewInlineKeyboardButtonData("Назад", "back_to_dates"),
+		tgbotapi.NewInlineKeyboardButtonData("Отмена", "back_to_appointments"),
+	})
+
+	msg := tgbotapi.NewMessage(chatID, "Выберите новое время:")
+	msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(keyboard...)
+	h.bot.Send(msg)
+}
+
+func (h *Handler) handleRescheduleTime(chatID int64, userID int64, timeStr string) {
+	state := h.bookingStates[userID]
+
+	appointmentUUID, err := uuid.Parse(state.AppointmentID)
+	if err != nil {
+		log.Printf("Error parsing appointment UUID: %v", err)
+		h.sendMessage(chatID, "Ошибка при обработке записи")
+		return
+	}
+
+	// Get original appointment to preserve services
+	originalAppointment, err := h.service.GetAppointmentByID(appointmentUUID)
+	if err != nil {
+		log.Printf("Error getting original appointment: %v", err)
+		h.sendMessage(chatID, "Ошибка при получении данных записи")
+		return
+	}
+
+	// Calculate total duration from services
+	totalDuration := 0
+	for _, service := range originalAppointment.Services {
+		totalDuration += service.Duration
+	}
+
+	// Parse and set new time
+	timeLayout := "15:04"
+	newTime, err := time.Parse(timeLayout, timeStr)
+	if err != nil {
+		log.Printf("Error parsing time: %v", err)
+		h.sendMessage(chatID, "Ошибка при обработке времени")
+		return
+	}
+
+	// Create new start and end times
+	newStartTime := time.Date(
+		state.Date.Year(), state.Date.Month(), state.Date.Day(),
+		newTime.Hour(), newTime.Minute(), 0, 0,
+		state.Date.Location(),
+	)
+	newEndTime := newStartTime.Add(time.Duration(totalDuration) * time.Minute)
+
+	// Get old calendar event ID
+	oldEventID, err := h.service.GetCalendarEventID(appointmentUUID)
+	if err != nil {
+		log.Printf("Error getting old calendar event ID: %v", err)
+	}
+
+	// Update appointment with new times
+	err = h.service.UpdateAppointmentDateTime(appointmentUUID, newStartTime, newEndTime)
+	if err != nil {
+		log.Printf("Error updating appointment: %v", err)
+		h.sendMessage(chatID, "Не удалось обновить запись")
+	}
+
+	// Handle Google Calendar update
+	if h.calendarService != nil {
+		if oldEventID != "" {
+			h.calendarService.RemoveAppointment(oldEventID)
+		}
+
+		updatedAppointment, _ := h.service.GetAppointmentByID(appointmentUUID)
+		client, _ := h.service.GetClientBy("telegram_id", userID)
+
+		if updatedAppointment != nil && client != nil {
+			eventID, err := h.calendarService.AddAppointment(updatedAppointment, client)
+			if err == nil {
+				h.service.SaveCalendarEventID(appointmentUUID, eventID)
+			}
+		}
+	}
+
+	h.sendMessage(chatID, fmt.Sprintf("✅ Запись успешно перенесена на %s", newStartTime.Format("02.01.2006 15:04")))
+	delete(h.bookingStates, userID)
 }
