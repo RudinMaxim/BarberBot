@@ -744,8 +744,7 @@ func (h *Handler) handleAppointmentSelection(chatID int64, appointmentID string)
 
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Отменить", fmt.Sprintf("cancel:%s", appointmentID)),
-			tgbotapi.NewInlineKeyboardButtonData(helper.GetText("back_button"), "go_home"),
+			tgbotapi.NewInlineKeyboardButtonData(helper.GetText("back_button"), "back_to_appointments"),
 		),
 	)
 
@@ -794,7 +793,7 @@ func (h *Handler) handleCancel(update tgbotapi.Update) {
 	}
 
 	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
-		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("back_button"), "back_to_appointments"),
+		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), "go_home"),
 	})
 
 	msg := tgbotapi.NewMessage(chatID, helper.GetText("select_cancel_appointment"))
@@ -913,7 +912,7 @@ func (h *Handler) handleAppointmentReschedule(chatID int64, userID int64, appoin
 		keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{button})
 	}
 	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
-		tgbotapi.NewInlineKeyboardButtonData("Отмена", "go_home"),
+		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), "go_home"),
 	})
 
 	msg := tgbotapi.NewMessage(chatID, "Выберите новую дату:")
@@ -950,7 +949,7 @@ func (h *Handler) handleRescheduleDate(chatID int64, userID int64, dateStr strin
 	}
 	keyboard = append(keyboard, []tgbotapi.InlineKeyboardButton{
 		tgbotapi.NewInlineKeyboardButtonData("Назад", "back_to_dates"),
-		tgbotapi.NewInlineKeyboardButtonData("Отмена", "go_home"),
+		tgbotapi.NewInlineKeyboardButtonData(helper.GetText("cancel_button"), "go_home"),
 	})
 
 	msg := tgbotapi.NewMessage(chatID, "Выберите новое время:")
