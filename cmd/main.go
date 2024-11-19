@@ -99,7 +99,7 @@ func (app *application) initBot() error {
 }
 
 func (app *application) initCache() error {
-	redisCache := database.NewRedisCache("127.0.0.1:6379")
+	redisCache := database.NewRedisCache("redis:6379")
 
 	if err := redisCache.Ping(app.ctx); err != nil {
 		return fmt.Errorf("failed to ping Redis: %w", err)
