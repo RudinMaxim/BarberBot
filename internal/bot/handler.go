@@ -5,6 +5,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/RudinMaxim/BarberBot.git/common"
@@ -48,6 +49,8 @@ type Handler struct {
 	bot             *tgbotapi.BotAPI
 	bookingStates   map[int64]*BookingState
 	calendarService *calendar.GoogleCalendarService
+	notifications   map[string]chan struct{}
+	mu              sync.RWMutex
 }
 
 func NewHandler(service *Service, bot *tgbotapi.BotAPI) *Handler {
@@ -61,6 +64,7 @@ func NewHandler(service *Service, bot *tgbotapi.BotAPI) *Handler {
 		bot:             bot,
 		bookingStates:   make(map[int64]*BookingState),
 		calendarService: calendarService,
+		notifications:   make(map[string]chan struct{}),
 	}
 }
 
@@ -121,6 +125,24 @@ func (h *Handler) handleCommand(update tgbotapi.Update) {
 		h.handleCancel(update)
 	case "reschedule":
 		h.handleReschedule(update)
+	case "test_notify":
+		testID := uuid.New().String()
+		h.ScheduleNotification(
+			testID,
+			update.Message.Chat.ID,
+			"🔔 Тестовое уведомление через 10 секунд!",
+			time.Now().Add(10*time.Second),
+		)
+		h.sendMessage(update.Message.Chat.ID, "Уведомление запланировано! ID: "+testID)
+
+	case "cancel_notify":
+		args := strings.Split(update.Message.Text, " ")
+		if len(args) < 2 {
+			h.sendMessage(update.Message.Chat.ID, "Укажите ID уведомления")
+			return
+		}
+		h.CancelNotification(args[1])
+		h.sendMessage(update.Message.Chat.ID, "Уведомление отменено!")
 	default:
 		h.handleUnknownCommand(update)
 	}
@@ -209,7 +231,33 @@ func (h *Handler) sendMessage(chatID int64, text string) {
 	}
 }
 
-// ================Static==================
+func (h *Handler) ScheduleNotification(appointmentID string, chatID int64, message string, notifyAt time.Time) {
+	h.mu.Lock()
+	stopCh := make(chan struct{})
+	h.notifications[appointmentID] = stopCh
+	h.mu.Unlock()
+
+	go func() {
+		delay := time.Until(notifyAt)
+		select {
+		case <-time.After(delay):
+			h.sendMessage(chatID, message)
+		case <-stopCh:
+			log.Printf("Notification cancelled for appointment %s", appointmentID)
+			return
+		}
+	}()
+}
+
+func (h *Handler) CancelNotification(appointmentID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if stopCh, exists := h.notifications[appointmentID]; exists {
+		close(stopCh)
+		delete(h.notifications, appointmentID)
+	}
+} // ================Static==================
 
 func (h *Handler) handleUnknownCommand(update tgbotapi.Update) {
 	h.sendMessage(update.Message.Chat.ID, helper.GetText("unknown_command"))
@@ -533,6 +581,30 @@ func (h *Handler) handleBookingConfirmation(chatID int64, userID int64) {
 		}
 	}
 
+	if appointment != nil {
+		notificationTime := appointment.StartTime.Add(-2 * time.Hour)
+		notificationMessage := fmt.Sprintf(
+			"🔔 Напоминание!\n\n"+
+				"Через 2 часа у вас запись:\n"+
+				"🗓 %s\n"+
+				"🕒 %s\n"+
+				"💇 %s\n"+
+				"💰 %.2f руб.\n"+
+				"🚩 улица Куйбышева, 79",
+			appointment.StartTime.Format("02.01.2006"),
+			appointment.StartTime.Format("15:04"),
+			appointment.Name,
+			appointment.TotalPrice,
+		)
+		h.ScheduleNotification(
+			appointment.UUID.String(),
+			chatID,
+			notificationMessage,
+			notificationTime,
+		)
+		log.Printf("Scheduled notification for appointment %s at %v", appointment.UUID, notificationTime)
+	}
+
 	successMessage := fmt.Sprintf(
 		"🌟 Ура, ваша запись успешно создана!\n\n"+
 			"🗓 Дата: %s\n\n"+
@@ -737,6 +809,10 @@ func (h *Handler) handleAppointmentCancellation(chatID int64, userID int64, appo
 		return
 	}
 
+	// Cancel notification before cancelling appointment
+	h.CancelNotification(appointmentID)
+
+	// Rest of your existing cancellation code...
 	eventID, err := h.service.GetCalendarEventID(uuid)
 	if err != nil {
 		log.Printf("Error getting calendar event ID: %v", err)
@@ -951,6 +1027,31 @@ func (h *Handler) handleRescheduleTime(chatID int64, userID int64, timeStr strin
 				h.service.SaveCalendarEventID(appointmentUUID, eventID)
 			}
 		}
+
+		if updatedAppointment != nil {
+			notificationTime := newStartTime.Add(-2 * time.Hour)
+			notificationMessage := fmt.Sprintf(
+				"🔔 Напоминание о перенесенной записи!\n\n"+
+					"Через 2 часа у вас запись:\n"+
+					"🗓 %s\n"+
+					"🕒 %s\n"+
+					"💇 %s\n"+
+					"💰 %.2f руб.\n"+
+					"🚩 улица Куйбышева, 79",
+				newStartTime.Format("02.01.2006"),
+				newStartTime.Format("15:04"),
+				updatedAppointment.Name,
+				updatedAppointment.TotalPrice,
+			)
+			h.ScheduleNotification(
+				appointmentUUID.String(),
+				chatID,
+				notificationMessage,
+				notificationTime,
+			)
+			log.Printf("Scheduled notification for rescheduled appointment %s at %v", appointmentUUID, notificationTime)
+		}
+
 	}
 
 	h.sendMessage(chatID, fmt.Sprintf("✅ Запись успешно перенесена на %s", newStartTime.Format("02.01.2006 15:04")))
