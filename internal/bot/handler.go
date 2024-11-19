@@ -347,7 +347,10 @@ func (h *Handler) handleContact(update tgbotapi.Update) {
 		return
 	}
 
-	h.sendMessage(message.Chat.ID, helper.GetFormattedMessage("registration_complete", message.From.FirstName))
+	msg := tgbotapi.NewMessage(message.Chat.ID, helper.GetFormattedMessage("registration_complete", message.From.FirstName))
+	msg.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
+	h.bot.Send(msg)
+
 	h.handleHome(update)
 }
 
@@ -360,6 +363,7 @@ func (h *Handler) requestContact(chatID int64) {
 	)
 
 	keyboard.OneTimeKeyboard = true
+	keyboard.ResizeKeyboard = true
 	msg.ReplyMarkup = keyboard
 
 	h.bot.Send(msg)
