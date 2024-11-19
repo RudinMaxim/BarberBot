@@ -64,57 +64,18 @@ func (r *Repository) CreateAppointment(appointment *common.Appointment) error {
 }
 
 func (r *Repository) GetAppointmentByID(appointmentID uuid.UUID) (*common.Appointment, error) {
-	ctx := context.Background()
-	cacheKey := fmt.Sprintf("appointment:%s", appointmentID)
-
 	var appointment common.Appointment
-
-	// Попытка получить данные из кэша
-	err := r.cache.Get(ctx, cacheKey, &appointment)
-	if err == nil {
-		return &appointment, nil
-	}
-
-	// Запрос к базе данных, если данных нет в кэше
-	err = r.db.Preload("Services").First(&appointment, appointmentID).Error
+	err := r.db.Preload("Services").First(&appointment, appointmentID).Error
 	if err != nil {
 		return nil, err
 	}
-
-	// Сохраняем результат в кэш на 30 минут
-	cacheDuration := 30 * time.Minute
-	if err = r.cache.Set(ctx, cacheKey, appointment, cacheDuration); err != nil {
-		return nil, fmt.Errorf("failed to cache data: %w", err)
-	}
-
 	return &appointment, nil
 }
 
 func (r *Repository) GetAppointmentsByClientID(clientID uuid.UUID) ([]common.Appointment, error) {
-	ctx := context.Background()
-	cacheKey := fmt.Sprintf("appointments:client:%s", clientID)
-
 	var appointments []common.Appointment
-
-	// Попытка получить данные из кэша
-	err := r.cache.Get(ctx, cacheKey, &appointments)
-	if err == nil {
-		return appointments, nil
-	}
-
-	// Запрос к базе данных, если данных нет в кэше
-	err = r.db.Where("client_id = ?", clientID).Find(&appointments).Error
-	if err != nil {
-		return nil, err
-	}
-
-	// Сохраняем результат в кэш на 30 минут
-	cacheDuration := 30 * time.Minute
-	if err = r.cache.Set(ctx, cacheKey, appointments, cacheDuration); err != nil {
-		return nil, fmt.Errorf("failed to cache data: %w", err)
-	}
-
-	return appointments, nil
+	err := r.db.Where("client_id = ?", clientID).Find(&appointments).Error
+	return appointments, err
 }
 
 func (r *Repository) UpdateAppointment(appointment *common.Appointment) error {
@@ -130,30 +91,9 @@ func (r *Repository) GetAppointmentsForDate(date time.Time) ([]common.Appointmen
 }
 
 func (r *Repository) GetScheduledAppointmentsByClientID(clientID uuid.UUID) ([]common.Appointment, error) {
-	ctx := context.Background()
-	cacheKey := fmt.Sprintf("scheduled_appointments:client:%s", clientID)
-
 	var appointments []common.Appointment
-
-	// Попытка получить данные из кэша
-	err := r.cache.Get(ctx, cacheKey, &appointments)
-	if err == nil {
-		return appointments, nil
-	}
-
-	// Запрос к базе данных, если данных нет в кэше
-	err = r.db.Where("client_id = ? AND status = ?", clientID, "scheduled").Find(&appointments).Error
-	if err != nil {
-		return nil, err
-	}
-
-	// Сохраняем результат в кэш на 30 минут
-	cacheDuration := 30 * time.Minute
-	if err = r.cache.Set(ctx, cacheKey, appointments, cacheDuration); err != nil {
-		return nil, fmt.Errorf("failed to cache data: %w", err)
-	}
-
-	return appointments, nil
+	err := r.db.Where("client_id = ? AND status = ?", clientID, "scheduled").Find(&appointments).Error
+	return appointments, err
 }
 
 // ===============Service===================
@@ -248,15 +188,51 @@ func (r *Repository) GetWorkingHoursByDayOfWeek(dayOfWeek int) (*common.WorkingH
 }
 
 func (r *Repository) GetWorkingHoursAvailableDates() ([]common.WorkingHours, error) {
+	ctx := context.Background()
+	cacheKey := "working_hours:available"
+
 	var workingHours []common.WorkingHours
-	err := r.db.Where("is_active = ?", true).Find(&workingHours).Error
-	return workingHours, err
+
+	err := r.cache.Get(ctx, cacheKey, &workingHours)
+	if err == nil {
+		return workingHours, nil
+	}
+
+	err = r.db.Where("is_active = ?", true).Find(&workingHours).Error
+	if err != nil {
+		return nil, err
+	}
+
+	cacheDuration := 24 * time.Hour
+	if err = r.cache.Set(ctx, cacheKey, workingHours, cacheDuration); err != nil {
+		return nil, fmt.Errorf("failed to cache working hours: %w", err)
+	}
+
+	return workingHours, nil
 }
 
 func (r *Repository) GetWorkingHours() ([]common.WorkingHours, error) {
+	ctx := context.Background()
+	cacheKey := "working_hours:all"
+
 	var workingHours common.WorkingHours
-	err := r.db.Find(&workingHours).Error
-	return []common.WorkingHours{workingHours}, err
+
+	err := r.cache.Get(ctx, cacheKey, &workingHours)
+	if err == nil {
+		return []common.WorkingHours{workingHours}, nil
+	}
+
+	err = r.db.Find(&workingHours).Error
+	if err != nil {
+		return nil, err
+	}
+
+	cacheDuration := 24 * time.Hour
+	if err = r.cache.Set(ctx, cacheKey, workingHours, cacheDuration); err != nil {
+		return nil, fmt.Errorf("failed to cache working hours: %w", err)
+	}
+
+	return []common.WorkingHours{workingHours}, nil
 }
 
 func (r *Repository) SaveCalendarEventID(appointmentID uuid.UUID, eventID string) error {
