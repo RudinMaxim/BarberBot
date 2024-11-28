@@ -111,7 +111,7 @@ func (app *application) initCache() error {
 
 func (app *application) runBot(handler *bot.Handler) {
 	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
+	u.Timeout = 180
 
 	config.LogAction("Starting to receive updates...")
 	updates := app.bot.GetUpdatesChan(u)
